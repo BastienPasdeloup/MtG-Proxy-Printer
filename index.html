@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MtG Proxy Printer</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🃏</text></svg>">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>🃏 MtG Proxy Printer</h1>
+    <p class="subtitle">Load a decklist, pick a language, print proxies (9 per A4 page, 62&nbsp;×&nbsp;87&nbsp;mm)</p>
+  </header>
+
+  <main>
+    <section class="panel" id="controls">
+      <div class="control-row">
+        <label for="deck-url">Decklist URL <span class="hint">(Moxfield or MTGTop8)</span></label>
+        <input type="url" id="deck-url" placeholder="https://moxfield.com/decks/… or https://mtgtop8.com/event?e=…&d=…">
+      </div>
+
+      <details id="paste-fallback">
+        <summary>…or paste a decklist manually</summary>
+        <textarea id="deck-text" rows="8" placeholder="4 Lightning Bolt&#10;2 Counterspell&#10;&#10;Sideboard&#10;2 Duress"></textarea>
+      </details>
+
+      <div class="control-row inline">
+        <div>
+          <label for="language">Language</label>
+          <select id="language">
+            <option value="en">English</option>
+            <option value="fr">Français</option>
+            <option value="de">Deutsch</option>
+            <option value="it">Italiano</option>
+            <option value="es">Español</option>
+            <option value="pt">Português</option>
+            <option value="ja">日本語</option>
+            <option value="ko">한국어</option>
+            <option value="ru">Русский</option>
+            <option value="zhs">简体中文</option>
+            <option value="zht">繁體中文</option>
+          </select>
+        </div>
+        <div>
+          <label for="include-sideboard">Sideboard</label>
+          <select id="include-sideboard">
+            <option value="yes">Include</option>
+            <option value="no">Exclude</option>
+          </select>
+        </div>
+        <button id="load-btn" class="primary">Load Cards</button>
+      </div>
+
+      <div id="status" class="status hidden">
+        <div class="status-text" id="status-text"></div>
+        <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
+      </div>
+    </section>
+
+    <section id="deck-section" class="hidden">
+      <div class="deck-header">
+        <h2 id="deck-name"></h2>
+        <div class="deck-stats" id="deck-stats"></div>
+      </div>
+      <div id="card-grid" class="card-grid"></div>
+      <div class="generate-row">
+        <button id="generate-btn" class="primary big">Generate Proxies (PDF)</button>
+      </div>
+    </section>
+
+    <section class="panel legend">
+      <h3>Legend</h3>
+      <ul>
+        <li><span class="badge badge-localized">✓</span> Card found in the chosen language.</li>
+        <li><span class="badge badge-overlay">T</span> No usable scan in the chosen language — English card shown with its text box replaced by the official translated text (from Scryfall's printed-card data).</li>
+        <li><span class="badge badge-english">EN</span> Card was never printed in the chosen language — English version used (no official translation exists).</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    <p>Card data and images courtesy of <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.
+    Unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards.
+    Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
