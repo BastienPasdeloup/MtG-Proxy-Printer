@@ -45,6 +45,27 @@ const $ = (id) => document.getElementById(id);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// Fetch with retry + backoff: Scryfall throttles bursts (HTTP 429), and one
+// unretried failure used to cascade over every remaining card in the deck.
+async function fetchRetry(url, opts = undefined, tries = 4) {
+  let lastError = null;
+  for (let i = 0; i < tries; i++) {
+    try {
+      const resp = await fetch(url, opts);
+      if (resp.status === 429 || resp.status >= 500) {
+        lastError = new Error(`HTTP ${resp.status}`);
+        await sleep(1500 * (i + 1));
+        continue;
+      }
+      return resp; // includes 404 etc. — the caller decides
+    } catch (e) {
+      lastError = e;
+      await sleep(1000 * (i + 1));
+    }
+  }
+  throw lastError || new Error("Request failed");
+}
+
 function setStatus(text, frac = null, isError = false) {
   $("status").classList.remove("hidden");
   const st = $("status-text");
@@ -169,7 +190,7 @@ async function resolveCards(names) {
   const notFound = [];
   for (let i = 0; i < names.length; i += 75) {
     const chunk = names.slice(i, i + 75);
-    const resp = await fetch(`${SCRYFALL}/cards/collection`, {
+    const resp = await fetchRetry(`${SCRYFALL}/cards/collection`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ identifiers: chunk.map((name) => ({ name })) }),
@@ -194,7 +215,7 @@ async function resolveCards(names) {
     if (found.has(name.toLowerCase())) continue;
     const front = name.split("//")[0].trim();
     try {
-      const resp = await fetch(`${SCRYFALL}/cards/named?fuzzy=${encodeURIComponent(front)}`);
+      const resp = await fetchRetry(`${SCRYFALL}/cards/named?fuzzy=${encodeURIComponent(front)}`);
       if (resp.ok) {
         found.set(name.toLowerCase(), await resp.json());
       } else {
@@ -214,7 +235,7 @@ async function findLocalized(card, lang) {
   const q = `oracleid:${card.oracle_id} lang:${lang} game:paper`;
   const url = `${SCRYFALL}/cards/search?q=${encodeURIComponent(q)}` +
     `&unique=prints&order=released&include_multilingual=true`;
-  const resp = await fetch(url);
+  const resp = await fetchRetry(url);
   if (resp.status === 404) return { imageCard: null, textCard: null };
   if (!resp.ok) throw new Error(`Scryfall error (HTTP ${resp.status})`);
   const data = await resp.json();
@@ -262,7 +283,7 @@ function faceImageUrls(card) {
  * ---------------------------------------------------------- */
 
 async function loadImage(url) {
-  const resp = await fetch(url);
+  const resp = await fetchRetry(url);
   if (!resp.ok) throw new Error(`Image fetch failed (HTTP ${resp.status})`);
   const blob = await resp.blob();
   return await createImageBitmap(blob);
@@ -400,11 +421,57 @@ async function buildCardEntry(englishCard, lang) {
  * Main "Load Cards" flow
  * ---------------------------------------------------------- */
 
+let failedEntries = []; // entries that failed in the last load, for the retry button
+let currentLang = "en";
+
+// Resolve and build the given entries, appending successes to `cards`.
+// Returns the entries that could not be loaded.
+async function loadEntries(entries, lang) {
+  setStatus(`Resolving ${entries.length} cards on Scryfall…`, 0.05);
+  const uniqueNames = [...new Set(entries.map((e) => e.name))];
+  const { found } = await resolveCards(uniqueNames);
+
+  const total = entries.length;
+  let done = 0;
+  const failed = [];
+
+  for (const entry of entries) {
+    done++;
+    setStatus(`Fetching images (${done}/${total}): ${entry.name}`, 0.05 + 0.95 * (done / total));
+    const englishCard = found.get(entry.name.toLowerCase());
+    if (!englishCard) { failed.push(entry); continue; }
+    try {
+      const built = await buildCardEntry(englishCard, lang);
+      cards.push({ name: entry.name, qty: entry.qty, section: entry.section, ...built });
+    } catch (e) {
+      console.error(`Failed to build ${entry.name}:`, e);
+      failed.push(entry);
+    }
+    await sleep(100); // stay well within Scryfall rate limits
+  }
+  return failed;
+}
+
+function reportLoadResult() {
+  renderGrid();
+  $("retry-btn").classList.toggle("hidden", failedEntries.length === 0);
+  if (failedEntries.length > 0) {
+    setStatus(`Done, but ${failedEntries.length} card(s) could not be loaded: ` +
+      failedEntries.map((e) => e.name).join(", "), 1, true);
+  } else if (cards.length === 0) {
+    setStatus("No card could be loaded — check the decklist and try again.", 1, true);
+  } else {
+    hideStatus();
+  }
+}
+
 async function onLoadCards() {
   const btn = $("load-btn");
   btn.disabled = true;
+  $("retry-btn").classList.add("hidden");
   $("deck-section").classList.add("hidden");
   cards = [];
+  failedEntries = [];
 
   try {
     setStatus("Loading decklist…", 0.02);
@@ -425,44 +492,30 @@ async function onLoadCards() {
     }
     entries = [...merged.values()];
 
-    setStatus(`Resolving ${entries.length} cards on Scryfall…`, 0.05);
-    const uniqueNames = [...new Set(entries.map((e) => e.name))];
-    const { found, notFound } = await resolveCards(uniqueNames);
-
-    const lang = $("language").value;
-    const total = entries.length;
-    let done = 0;
-    const failed = [...notFound];
-
-    for (const entry of entries) {
-      const englishCard = found.get(entry.name.toLowerCase());
-      done++;
-      if (!englishCard) continue;
-      setStatus(`Fetching images (${done}/${total}): ${entry.name}`, 0.05 + 0.95 * (done / total));
-      try {
-        const built = await buildCardEntry(englishCard, lang);
-        cards.push({ name: entry.name, qty: entry.qty, section: entry.section, ...built });
-      } catch (e) {
-        console.error(`Failed to build ${entry.name}:`, e);
-        failed.push(entry.name);
-      }
-      await sleep(80); // stay well within Scryfall rate limits
-    }
-
-    renderGrid();
-    if (failed.length > 0) {
-      setStatus(`Done, but these cards could not be loaded: ${failed.join(", ")}`, 1, true);
-    } else {
-      hideStatus();
-    }
-    if (cards.length === 0) {
-      setStatus("No card could be loaded — check the decklist and try again.", 1, true);
-    }
+    currentLang = $("language").value;
+    failedEntries = await loadEntries(entries, currentLang);
+    reportLoadResult();
   } catch (e) {
     console.error(e);
     setStatus(`Error: ${e.message}`, 1, true);
   } finally {
     btn.disabled = false;
+  }
+}
+
+async function onRetryFailed() {
+  const btn = $("retry-btn");
+  btn.disabled = true;
+  $("load-btn").disabled = true;
+  try {
+    failedEntries = await loadEntries(failedEntries, currentLang);
+    reportLoadResult();
+  } catch (e) {
+    console.error(e);
+    setStatus(`Error: ${e.message}`, 1, true);
+  } finally {
+    btn.disabled = false;
+    $("load-btn").disabled = false;
   }
 }
 
@@ -580,10 +633,22 @@ function makeTile(card) {
  * PDF generation: A4, 3 x 3 grid, 62 x 87 mm cards
  * ---------------------------------------------------------- */
 
-function onGeneratePdf() {
+// Ask whether double-sided cards should print both faces or only the front.
+function askDfcChoice(count) {
+  return new Promise((resolve) => {
+    const dlg = $("dfc-dialog");
+    $("dfc-count").textContent = count;
+    dlg.addEventListener("close", () => resolve(dlg.returnValue !== "front"), { once: true });
+    dlg.showModal();
+  });
+}
+
+async function onGeneratePdf() {
   const btn = $("generate-btn");
   btn.disabled = true;
   try {
+    const dfcCount = cards.filter((c) => c.faces.length > 1).length;
+    const includeBacks = dfcCount > 0 ? await askDfcChoice(dfcCount) : false;
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: "mm", format: "a4" });
 
@@ -593,10 +658,11 @@ function onGeneratePdf() {
     const MARGIN_X = (PAGE_W - COLS * CARD_W) / 2; // 12 mm
     const MARGIN_Y = (PAGE_H - ROWS * CARD_H) / 2; // 18 mm
 
-    // Flatten: each copy of each face is one slot
+    // Flatten: each copy of each printed face is one slot
     const slots = [];
     for (const card of cards) {
-      for (let i = 0; i < card.qty; i++) slots.push(...card.faces);
+      const faces = includeBacks ? card.faces : card.faces.slice(0, 1);
+      for (let i = 0; i < card.qty; i++) slots.push(...faces);
     }
 
     const drawCutMarks = () => {
@@ -642,6 +708,7 @@ function onGeneratePdf() {
  * ---------------------------------------------------------- */
 
 $("load-btn").addEventListener("click", onLoadCards);
+$("retry-btn").addEventListener("click", onRetryFailed);
 $("generate-btn").addEventListener("click", onGeneratePdf);
 $("deck-url").addEventListener("keydown", (e) => {
   if (e.key === "Enter") onLoadCards();

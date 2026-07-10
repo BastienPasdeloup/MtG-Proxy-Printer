@@ -56,6 +56,7 @@
       <div id="status" class="status hidden">
         <div class="status-text" id="status-text"></div>
         <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
+        <button id="retry-btn" class="primary hidden">Retry failed cards</button>
       </div>
     </section>
 
@@ -79,6 +80,16 @@
       </ul>
     </section>
   </main>
+
+  <dialog id="dfc-dialog">
+    <h3>Double-sided cards</h3>
+    <p>This deck contains <span id="dfc-count"></span> double-sided card(s).<br>
+    Do you want to print their backs as well, or only the fronts?</p>
+    <form method="dialog" class="dialog-buttons">
+      <button value="both" class="primary">Front + back</button>
+      <button value="front" class="primary secondary">Front only</button>
+    </form>
+  </dialog>
 
   <footer>
     <p>Card data and images courtesy of <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.
