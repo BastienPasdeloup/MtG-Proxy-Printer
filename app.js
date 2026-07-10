@@ -583,45 +583,64 @@ function bitmapToDataUrl(bitmap) {
 const OVERLAY_LAYOUTS = new Set(["normal", "transform", "modal_dfc", "meld"]);
 
 async function buildCardEntry(englishCard, lang, loc, eng) {
+  const langPrints = lang === "en" ? [] : (loc?.prints || []);
   const engPrints = eng?.prints?.length ? eng.prints : [englishCard];
-  let prints, status, overlayTexts = null;
 
-  if (lang === "en") {
-    prints = engPrints;
-    status = "localized";
-  } else if (loc?.prints?.length) {
-    prints = loc.prints;
-    status = "localized";
-  } else if (OVERLAY_LAYOUTS.has(englishCard.layout)) {
-    prints = engPrints;
-    const { texts, usedMT } = await resolveTranslations(englishCard, lang, loc);
-    overlayTexts = texts;
-    status = usedMT ? "mt" : "overlay";
-  } else {
-    prints = engPrints;
-    status = "english";
-  }
+  // The dropdown offers the chosen language's printings AND the English
+  // ones (translated on the fly), newest release first.
+  const prints = [...langPrints, ...engPrints]
+    .sort((a, b) => (b.released_at || "").localeCompare(a.released_at || ""));
 
-  const entry = { prints, printIndex: 0, status, overlayTexts };
+  // Default: best-looking print in the chosen language, else best English
+  const pool = langPrints.length ? langPrints : engPrints;
+  const best = pool.slice().sort((a, b) => printScore(a) - printScore(b))[0];
+
+  const entry = {
+    lang, english: englishCard, loc,
+    prints, printIndex: Math.max(0, prints.indexOf(best)),
+    overlayTexts: null, usedMT: false,
+  };
   entry.faces = await buildFaces(entry);
-  entry.printedName = overlayTexts?.[0]?.name || loc?.fields?.[0]?.name ||
-    prints[0].printed_name || prints[0].card_faces?.[0]?.printed_name ||
+  entry.status = computeStatus(entry);
+  entry.printedName = loc?.fields?.[0]?.name || entry.overlayTexts?.[0]?.name ||
+    langPrints[0]?.printed_name || langPrints[0]?.card_faces?.[0]?.printed_name ||
     englishCard.name;
   return entry;
 }
 
+function printNeedsOverlay(entry) {
+  const print = entry.prints[entry.printIndex];
+  return entry.lang !== "en" && print.lang !== entry.lang &&
+    OVERLAY_LAYOUTS.has(entry.english.layout);
+}
+
+function computeStatus(entry) {
+  const print = entry.prints[entry.printIndex];
+  if (entry.lang === "en" || print.lang === entry.lang) return "localized";
+  if (entry.overlayTexts) return entry.usedMT ? "mt" : "overlay";
+  return "english";
+}
+
 // Render the faces of the currently selected printing (also used when the
-// user picks another printing from the dropdown).
+// user picks another printing from the dropdown). Translations are resolved
+// lazily, the first time an English print needs the overlay.
 async function buildFaces(entry) {
   const print = entry.prints[entry.printIndex];
   const urls = faceImageUrls(print);
   if (urls.length === 0) throw new Error(`No image available for ${print.name}`);
   const printFaces = print.card_faces?.length ? print.card_faces : [print];
 
+  const needsOverlay = printNeedsOverlay(entry);
+  if (needsOverlay && !entry.overlayTexts) {
+    const { texts, usedMT } = await resolveTranslations(entry.english, entry.lang, entry.loc);
+    entry.overlayTexts = texts;
+    entry.usedMT = usedMT;
+  }
+
   const faces = [];
   for (let i = 0; i < urls.length; i++) {
     const bitmap = await loadImage(urls[i]);
-    const tr = entry.overlayTexts?.[i];
+    const tr = needsOverlay ? entry.overlayTexts?.[i] : null;
     if (tr && (tr.name || tr.type || tr.text)) {
       const mana = (printFaces[i]?.mana_cost || "").match(/{[^}]+}/g)?.length || 0;
       faces.push(drawWithOverlay(bitmap, tr, mana));
@@ -657,16 +676,11 @@ async function loadEntries(entries, lang) {
     localizedMap = await findLocalizedBatch(oracleIds, lang);
   }
 
-  // English print lists: needed as the display fallback for cards without a
-  // usable localized scan, and as the printing choices when lang is English.
-  const needEnglish = lang === "en"
-    ? oracleIds
-    : oracleIds.filter((id) => !localizedMap.get(id)?.prints?.length);
-  let englishMap = new Map();
-  if (needEnglish.length > 0) {
-    setStatus("Looking up printings…", 0.09);
-    englishMap = await findLocalizedBatch(needEnglish, "en");
-  }
+  // English print lists are always fetched: they fill the printing dropdown
+  // (translated on the fly when selected) and are the display fallback for
+  // cards without a usable localized scan.
+  setStatus("Looking up printings…", 0.09);
+  const englishMap = await findLocalizedBatch(oracleIds, "en");
 
   const total = entries.length;
   let done = 0;
@@ -834,7 +848,9 @@ function makeTile(card) {
     card.prints.forEach((p, i) => {
       const opt = document.createElement("option");
       opt.value = i;
-      opt.textContent = `${p.set.toUpperCase()} #${p.collector_number} · ${p.set_name}`;
+      const langTag = card.lang !== "en" ? `${p.lang.toUpperCase()} · ` : "";
+      const year = (p.released_at || "").slice(0, 4);
+      opt.textContent = `${langTag}${p.set.toUpperCase()} #${p.collector_number} · ${p.set_name}${year ? ` (${year})` : ""}`;
       opt.selected = i === card.printIndex;
       sel.appendChild(opt);
     });
@@ -845,6 +861,11 @@ function makeTile(card) {
       try {
         card.faces = await buildFaces(card);
         img.src = card.faces[0];
+        card.status = computeStatus(card);
+        const badge = BADGES[card.status];
+        badgeEl.className = `badge ${badge.cls}`;
+        badgeEl.textContent = badge.label;
+        badgeEl.title = badge.title;
       } catch (e) {
         console.error(e);
         setStatus(`Could not load that printing of ${card.name}: ${e.message}`, null, true);

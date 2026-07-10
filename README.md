@@ -10,7 +10,8 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
 2. Pick a **language**.
 3. Click **Load Cards** — card images are fetched from [Scryfall](https://scryfall.com) in the chosen language.
 4. Adjust the deck: remove cards, change quantities, pick another printing from the dropdown
-   under each card (double-faced cards: click the image to flip).
+   under each card — it lists the chosen language's printings and the English ones (translated
+   on the fly when selected), sorted by release date (double-faced cards: click the image to flip).
 5. Click **Generate Proxies** — downloads an A4 PDF with 9 cards per page, each 62 × 87 mm, with cut marks.
    If the deck contains double-sided cards, you are asked whether to print backs too.
    Print at **100% scale** (no "fit to page").
