@@ -45,23 +45,24 @@ const $ = (id) => document.getElementById(id);
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// Fetch with retry + backoff: Scryfall throttles bursts (HTTP 429), and one
-// unretried failure used to cascade over every remaining card in the deck.
-async function fetchRetry(url, opts = undefined, tries = 4) {
+// Fetch with retry + exponential backoff. Scryfall throttling can surface
+// either as HTTP 429 or as a CORS/network failure (Cloudflare error responses
+// carry no CORS headers, so fetch throws), and the block can last several
+// seconds — back off up to ~16 s before giving up.
+async function fetchRetry(url, opts = undefined, tries = 5) {
   let lastError = null;
   for (let i = 0; i < tries; i++) {
     try {
       const resp = await fetch(url, opts);
       if (resp.status === 429 || resp.status >= 500) {
         lastError = new Error(`HTTP ${resp.status}`);
-        await sleep(1500 * (i + 1));
-        continue;
+      } else {
+        return resp; // includes 404 etc. — the caller decides
       }
-      return resp; // includes 404 etc. — the caller decides
     } catch (e) {
       lastError = e;
-      await sleep(1000 * (i + 1));
     }
+    await sleep(Math.min(16000, 1000 * 2 ** i));
   }
   throw lastError || new Error("Request failed");
 }
@@ -229,45 +230,65 @@ async function resolveCards(names) {
   return { found, notFound };
 }
 
-// Find printings of this card in the requested language.
-// Returns { imageCard, textCard } — either may be null.
-async function findLocalized(card, lang) {
-  const q = `oracleid:${card.oracle_id} lang:${lang} game:paper`;
-  const url = `${SCRYFALL}/cards/search?q=${encodeURIComponent(q)}` +
-    `&unique=prints&order=released&include_multilingual=true`;
-  const resp = await fetchRetry(url);
-  if (resp.status === 404) return { imageCard: null, textCard: null };
-  if (!resp.ok) throw new Error(`Scryfall error (HTTP ${resp.status})`);
-  const data = await resp.json();
-  const prints = (data.data || []).filter((c) => c.lang === lang);
+const hasGoodImage = (c) =>
+  (c.image_status === "highres_scan" || c.image_status === "lowres") &&
+  (c.image_uris || (c.card_faces && c.card_faces[0].image_uris));
+const hasPrintedText = (c) =>
+  c.printed_text || (c.card_faces || []).some((f) => f.printed_text);
 
-  const hasGoodImage = (c) =>
-    (c.image_status === "highres_scan" || c.image_status === "lowres") &&
-    (c.image_uris || (c.card_faces && c.card_faces[0].image_uris));
-  const hasText = (c) =>
-    c.printed_text || (c.card_faces || []).some((f) => f.printed_text);
+// Among usable prints, prefer plain classic-frame versions over promos,
+// showcase / borderless treatments and Universes Beyond crossovers.
+// Ties keep the released-desc order from the search.
+const printScore = (c) => {
+  let s = 0;
+  if (c.promo || c.promo_types) s += 2;
+  if (c.full_art) s += 2;
+  if (c.border_color !== "black") s += 2;
+  if ((c.frame_effects || []).length) s += 1;
+  if (c.frame !== "2015" && c.frame !== "2003") s += 1;
+  if (c.security_stamp === "triangle") s += 1; // Universes Beyond
+  if (["funny", "memorabilia", "masterpiece", "promo"].includes(c.set_type)) s += 2;
+  if (c.image_status !== "highres_scan") s += 0.5;
+  return s;
+};
 
-  // Among usable prints, prefer plain classic-frame versions over promos,
-  // showcase / borderless treatments and Universes Beyond crossovers.
-  // Ties keep the released-desc order from the search.
-  const printScore = (c) => {
-    let s = 0;
-    if (c.promo || c.promo_types) s += 2;
-    if (c.full_art) s += 2;
-    if (c.border_color !== "black") s += 2;
-    if ((c.frame_effects || []).length) s += 1;
-    if (c.frame !== "2015" && c.frame !== "2003") s += 1;
-    if (c.security_stamp === "triangle") s += 1; // Universes Beyond
-    if (["funny", "memorabilia", "masterpiece", "promo"].includes(c.set_type)) s += 2;
-    if (c.image_status !== "highres_scan") s += 0.5;
-    return s;
-  };
+// Find printings of many cards in the requested language with as few API
+// calls as possible: Scryfall's search accepts (oracleid:A or oracleid:B …),
+// so ~18 cards fit in one request instead of one request per card (which
+// used to trip Scryfall's rate limiting on big decks).
+// Returns Map<oracle_id, { imageCard, textCard }>.
+async function findLocalizedBatch(oracleIds, lang) {
+  const printsById = new Map();
+  const CHUNK = 18;
+  for (let i = 0; i < oracleIds.length; i += CHUNK) {
+    const ids = oracleIds.slice(i, i + CHUNK);
+    const q = `(${ids.map((id) => `oracleid:${id}`).join(" or ")}) lang:${lang} game:paper`;
+    let url = `${SCRYFALL}/cards/search?q=${encodeURIComponent(q)}` +
+      `&unique=prints&order=released&include_multilingual=true`;
+    while (url) {
+      const resp = await fetchRetry(url);
+      if (resp.status === 404) break; // none of this chunk exists in that language
+      if (!resp.ok) throw new Error(`Scryfall error (HTTP ${resp.status})`);
+      const data = await resp.json();
+      for (const c of data.data || []) {
+        if (c.lang !== lang) continue;
+        if (!printsById.has(c.oracle_id)) printsById.set(c.oracle_id, []);
+        printsById.get(c.oracle_id).push(c);
+      }
+      url = data.has_more ? data.next_page : null;
+      await sleep(120);
+    }
+  }
 
-  const usable = prints.filter(hasGoodImage).sort((a, b) => printScore(a) - printScore(b));
-  return {
-    imageCard: usable[0] || null,
-    textCard: prints.find(hasText) || null,
-  };
+  const result = new Map();
+  for (const [oracleId, prints] of printsById) {
+    const usable = prints.filter(hasGoodImage).sort((a, b) => printScore(a) - printScore(b));
+    result.set(oracleId, {
+      imageCard: usable[0] || null,
+      textCard: prints.find(hasPrintedText) || null,
+    });
+  }
+  return result;
 }
 
 function faceImageUrls(card) {
@@ -370,13 +391,13 @@ function bitmapToDataUrl(bitmap) {
  * Card pipeline: english card + language -> entry with images
  * ---------------------------------------------------------- */
 
-async function buildCardEntry(englishCard, lang) {
+async function buildCardEntry(englishCard, lang, localized) {
   let status = "localized";
   let displayCard = englishCard;
   let textCard = null;
 
   if (lang !== "en") {
-    const localized = await findLocalized(englishCard, lang);
+    localized = localized || { imageCard: null, textCard: null };
     if (localized.imageCard) {
       displayCard = localized.imageCard;
       status = "localized";
@@ -427,9 +448,18 @@ let currentLang = "en";
 // Resolve and build the given entries, appending successes to `cards`.
 // Returns the entries that could not be loaded.
 async function loadEntries(entries, lang) {
-  setStatus(`Resolving ${entries.length} cards on Scryfall…`, 0.05);
+  setStatus(`Resolving ${entries.length} cards on Scryfall…`, 0.02);
   const uniqueNames = [...new Set(entries.map((e) => e.name))];
   const { found } = await resolveCards(uniqueNames);
+
+  let localizedMap = new Map();
+  if (lang !== "en") {
+    setStatus(`Looking up ${lang} printings…`, 0.08);
+    const oracleIds = [...new Set(
+      entries.map((e) => found.get(e.name.toLowerCase())?.oracle_id).filter(Boolean)
+    )];
+    localizedMap = await findLocalizedBatch(oracleIds, lang);
+  }
 
   const total = entries.length;
   let done = 0;
@@ -437,17 +467,17 @@ async function loadEntries(entries, lang) {
 
   for (const entry of entries) {
     done++;
-    setStatus(`Fetching images (${done}/${total}): ${entry.name}`, 0.05 + 0.95 * (done / total));
+    setStatus(`Fetching images (${done}/${total}): ${entry.name}`, 0.12 + 0.88 * (done / total));
     const englishCard = found.get(entry.name.toLowerCase());
     if (!englishCard) { failed.push(entry); continue; }
     try {
-      const built = await buildCardEntry(englishCard, lang);
+      const built = await buildCardEntry(englishCard, lang, localizedMap.get(englishCard.oracle_id));
       cards.push({ name: entry.name, qty: entry.qty, section: entry.section, ...built });
     } catch (e) {
       console.error(`Failed to build ${entry.name}:`, e);
       failed.push(entry);
     }
-    await sleep(100); // stay well within Scryfall rate limits
+    await sleep(60); // images come from Scryfall's CDN, which is not rate-limited
   }
   return failed;
 }
