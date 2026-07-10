@@ -182,7 +182,18 @@ button.primary.big { padding: 0.8rem 2.2rem; font-size: 1.1rem; }
 .legend .badge { position: static; margin-right: 0.4rem; }
 .badge-localized { background: var(--green); }
 .badge-overlay { background: var(--blue); }
+.badge-mt { background: #d08030; }
 .badge-english { background: #8a8fa3; }
+
+.print-select {
+  width: 100%;
+  font-size: 0.72rem;
+  padding: 0.25rem 0.4rem;
+  border-radius: 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
 
 .section-label {
   grid-column: 1 / -1;

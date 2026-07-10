@@ -256,7 +256,10 @@ const printScore = (c) => {
 // calls as possible: Scryfall's search accepts (oracleid:A or oracleid:B …),
 // so ~18 cards fit in one request instead of one request per card (which
 // used to trip Scryfall's rate limiting on big decks).
-// Returns Map<oracle_id, { imageCard, textCard }>.
+// Returns Map<oracle_id, { prints, fields }>:
+// - prints: usable prints (good image), best-looking first
+// - fields: per-face official translations merged across ALL prints of that
+//   language — old prints often carry printed_name but no printed_text.
 async function findLocalizedBatch(oracleIds, lang) {
   const printsById = new Map();
   const CHUNK = 18;
@@ -283,12 +286,167 @@ async function findLocalizedBatch(oracleIds, lang) {
   const result = new Map();
   for (const [oracleId, prints] of printsById) {
     const usable = prints.filter(hasGoodImage).sort((a, b) => printScore(a) - printScore(b));
-    result.set(oracleId, {
-      imageCard: usable[0] || null,
-      textCard: prints.find(hasPrintedText) || null,
-    });
+    const fields = [];
+    for (const p of prints) { // newest first: prefer current wording
+      const pFaces = p.card_faces?.length ? p.card_faces : [p];
+      pFaces.forEach((f, i) => {
+        fields[i] = fields[i] || {};
+        fields[i].name = fields[i].name || f.printed_name || (i === 0 ? p.printed_name : null);
+        fields[i].type = fields[i].type || f.printed_type_line || (i === 0 ? p.printed_type_line : null);
+        fields[i].text = fields[i].text || f.printed_text || (i === 0 ? p.printed_text : null);
+      });
+    }
+    result.set(oracleId, { prints: usable, fields });
   }
   return result;
+}
+
+/* ------------------------------------------------------------
+ * Translation fallback chain (for cards with no localized scan):
+ * Scryfall printed fields -> magicthegathering.io (Gatherer data)
+ * -> Google Translate (machine translation, flagged "MT")
+ * ---------------------------------------------------------- */
+
+const MTGIO_LANG = {
+  fr: "French", de: "German", it: "Italian", es: "Spanish",
+  pt: "Portuguese (Brazil)", ja: "Japanese", ko: "Korean", ru: "Russian",
+  zhs: "Chinese Simplified", zht: "Chinese Traditional",
+};
+const GOOGLE_LANG = {
+  fr: "fr", de: "de", it: "it", es: "es", pt: "pt", ja: "ja", ko: "ko",
+  ru: "ru", zhs: "zh-CN", zht: "zh-TW",
+};
+
+async function mtgioLookup(faceName, lang) {
+  try {
+    const url = "https://api.magicthegathering.io/v1/cards?name=" +
+      encodeURIComponent(`"${faceName}"`);
+    const resp = await fetchRetry(url, undefined, 2);
+    if (!resp.ok) return null;
+    const data = await resp.json();
+    const target = MTGIO_LANG[lang];
+    const best = {};
+    for (const c of data.cards || []) {
+      if (c.name.toLowerCase() !== faceName.toLowerCase()) continue;
+      for (const f of c.foreignNames || []) {
+        if (f.language !== target) continue;
+        best.name = best.name || f.name;
+        best.type = best.type || f.type;
+        best.text = best.text || f.text;
+      }
+    }
+    return best.name || best.type || best.text ? best : null;
+  } catch {
+    return null;
+  }
+}
+
+// Official translations of common type lines — Google mistranslates game
+// vocabulary badly ("Land" becomes the verb "to land"). Keyed by the part
+// before the em-dash; subtypes are still machine-translated.
+const TYPE_DICT = {
+  fr: {
+    "Land": "Terrain", "Creature": "Créature", "Artifact": "Artefact",
+    "Enchantment": "Enchantement", "Instant": "Éphémère", "Sorcery": "Rituel",
+    "Planeswalker": "Planeswalker", "Basic Land": "Terrain de base",
+    "Legendary Creature": "Créature légendaire", "Legendary Land": "Terrain légendaire",
+    "Legendary Artifact": "Artefact légendaire", "Legendary Enchantment": "Enchantement légendaire",
+    "Legendary Planeswalker": "Planeswalker légendaire",
+    "Artifact Creature": "Créature-artefact", "Enchantment Creature": "Créature-enchantement",
+    "Artifact Land": "Terrain-artefact", "Snow Land": "Terrain neigeux",
+    "Legendary Artifact Creature": "Créature-artefact légendaire",
+    "World Enchantment": "Enchantement de monde",
+  },
+  de: {
+    "Land": "Land", "Creature": "Kreatur", "Artifact": "Artefakt",
+    "Enchantment": "Verzauberung", "Instant": "Spontanzauber", "Sorcery": "Hexerei",
+    "Planeswalker": "Planeswalker", "Basic Land": "Standardland",
+    "Legendary Creature": "Legendäre Kreatur", "Legendary Land": "Legendäres Land",
+    "Legendary Artifact": "Legendäres Artefakt", "Artifact Creature": "Artefaktkreatur",
+  },
+  es: {
+    "Land": "Tierra", "Creature": "Criatura", "Artifact": "Artefacto",
+    "Enchantment": "Encantamiento", "Instant": "Instantáneo", "Sorcery": "Conjuro",
+    "Planeswalker": "Planeswalker", "Basic Land": "Tierra básica",
+    "Legendary Creature": "Criatura legendaria", "Legendary Land": "Tierra legendaria",
+    "Artifact Creature": "Criatura artefacto",
+  },
+  it: {
+    "Land": "Terra", "Creature": "Creatura", "Artifact": "Artefatto",
+    "Enchantment": "Incantesimo", "Instant": "Istantaneo", "Sorcery": "Stregoneria",
+    "Planeswalker": "Planeswalker", "Basic Land": "Terra Base",
+    "Legendary Creature": "Creatura Leggendaria", "Artifact Creature": "Creatura Artefatto",
+  },
+  pt: {
+    "Land": "Terreno", "Creature": "Criatura", "Artifact": "Artefato",
+    "Enchantment": "Encantamento", "Instant": "Mágica Instantânea", "Sorcery": "Feitiço",
+    "Planeswalker": "Planeswalker", "Basic Land": "Terreno Básico",
+    "Legendary Creature": "Criatura Lendária", "Artifact Creature": "Criatura Artefato",
+  },
+  ja: {
+    "Land": "土地", "Creature": "クリーチャー", "Artifact": "アーティファクト",
+    "Enchantment": "エンチャント", "Instant": "インスタント", "Sorcery": "ソーサリー",
+    "Planeswalker": "プレインズウォーカー", "Basic Land": "基本土地",
+    "Legendary Creature": "伝説のクリーチャー",
+  },
+};
+// French printed type lines separate subtypes with " : " instead of " — "
+const TYPE_SEP = { fr: " : " };
+
+async function translateTypeLine(typeLine, lang) {
+  const [types, subtypes] = typeLine.split(/\s+—\s+/);
+  const official = TYPE_DICT[lang]?.[types];
+  if (!official) return { text: await googleTranslate(typeLine, lang), mt: true };
+  if (!subtypes) return { text: official, mt: false };
+  const sub = await googleTranslate(subtypes, lang);
+  return { text: official + (TYPE_SEP[lang] || " — ") + sub, mt: true };
+}
+
+async function googleTranslate(text, lang) {
+  const url = "https://translate.googleapis.com/translate_a/single" +
+    `?client=gtx&sl=en&tl=${GOOGLE_LANG[lang]}&dt=t&q=${encodeURIComponent(text)}`;
+  const resp = await fetchRetry(url);
+  if (!resp.ok) throw new Error(`Translation service error (HTTP ${resp.status})`);
+  const data = await resp.json();
+  return (data[0] || []).map((seg) => seg[0]).join("");
+}
+
+// Build per-face {name, type, text} in the target language.
+async function resolveTranslations(englishCard, lang, loc) {
+  const faces = englishCard.card_faces?.length ? englishCard.card_faces : [englishCard];
+  const texts = [];
+  let usedMT = false;
+
+  for (let i = 0; i < faces.length; i++) {
+    const face = faces[i];
+    const official = loc?.fields?.[i] || {};
+    const t = {
+      name: official.name || null,
+      type: official.type || null,
+      text: official.text || null,
+    };
+    if (!t.name || !t.type || (!t.text && face.oracle_text)) {
+      const io = await mtgioLookup(face.name, lang);
+      if (io) {
+        t.name = t.name || io.name;
+        t.type = t.type || io.type;
+        t.text = t.text || io.text;
+      }
+    }
+    try {
+      if (!t.name) { t.name = await googleTranslate(face.name, lang); usedMT = true; }
+      if (!t.type && face.type_line) {
+        const tl = await translateTypeLine(face.type_line, lang);
+        t.type = tl.text;
+        usedMT = usedMT || tl.mt;
+      }
+      if (!t.text && face.oracle_text) { t.text = await googleTranslate(face.oracle_text, lang); usedMT = true; }
+    } catch (e) {
+      console.error(`Machine translation failed for ${face.name}:`, e);
+    }
+    texts.push(t);
+  }
+  return { texts, usedMT };
 }
 
 function faceImageUrls(card) {
@@ -332,50 +490,79 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-// Draw the English card, then paint the translated text over the text box.
-function drawWithOverlay(bitmap, printedText, printedTypeLine) {
+// Draw the English card, then paint the translated name, type line and
+// rules text over their respective areas of a standard modern frame.
+// `manaSymbols` = number of mana symbols, kept uncovered in the title bar.
+function drawWithOverlay(bitmap, tr, manaSymbols) {
   const W = bitmap.width, H = bitmap.height;
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
   ctx.drawImage(bitmap, 0, 0);
 
-  // Text box region of a standard modern frame (fractions of card size)
-  const x0 = 0.075 * W, x1 = 0.925 * W;
-  const y0 = 0.628 * H, y1 = 0.912 * H;
-  const pad = 0.018 * W;
+  const parchment = (x0, y0, x1, y1) => {
+    ctx.fillStyle = "#f3eedf"; // fully opaque or the English text ghosts through
+    ctx.strokeStyle = "rgba(60, 50, 30, 0.65)";
+    ctx.lineWidth = Math.max(1, 0.003 * W);
+    ctx.beginPath();
+    ctx.roundRect(x0, y0, x1 - x0, y1 - y0, 0.01 * W);
+    ctx.fill();
+    ctx.stroke();
+  };
 
-  ctx.fillStyle = "rgba(243, 238, 223, 0.97)";
-  ctx.strokeStyle = "rgba(60, 50, 30, 0.65)";
-  ctx.lineWidth = Math.max(1, 0.003 * W);
-  ctx.beginPath();
-  ctx.roundRect(x0, y0, x1 - x0, y1 - y0, 0.01 * W);
-  ctx.fill();
-  ctx.stroke();
+  // Single line, shrunk to fit, vertically centered in its bar
+  const drawBarText = (text, x0, y0, x1, y1, style) => {
+    parchment(x0, y0, x1, y1);
+    const pad = 0.015 * W;
+    const maxW = x1 - x0 - 2 * pad;
+    let size = (y1 - y0) * 0.62;
+    for (;;) {
+      ctx.font = `${style}${size}px Georgia, "Times New Roman", serif`;
+      if (ctx.measureText(text).width <= maxW || size < (y1 - y0) * 0.3) break;
+      size *= 0.94;
+    }
+    ctx.fillStyle = "#141210";
+    ctx.textBaseline = "middle";
+    ctx.fillText(text, x0 + pad, (y0 + y1) / 2, maxW);
+  };
 
-  const fullText = (printedTypeLine ? printedTypeLine + "\n" : "") + (printedText || "");
-  const boxW = x1 - x0 - 2 * pad;
-  const boxH = y1 - y0 - 2 * pad;
-
-  // Shrink font size until the text fits the box
-  let fontSize = 0.034 * H;
-  let lines;
-  for (;;) {
-    ctx.font = `${fontSize}px Georgia, "Times New Roman", serif`;
-    lines = wrapText(ctx, fullText, boxW);
-    if (lines.length * fontSize * 1.25 <= boxH || fontSize < 0.012 * H) break;
-    fontSize *= 0.93;
+  if (tr.name) {
+    // Leave the mana cost (right side of the title bar) visible
+    const x1 = (0.93 - manaSymbols * 0.048) * W;
+    drawBarText(tr.name, 0.068 * W, 0.048 * H, x1, 0.100 * H, "bold ");
+  }
+  if (tr.type) {
+    // Leave the set symbol (right side of the type bar) visible
+    drawBarText(tr.type, 0.068 * W, 0.563 * H, 0.872 * W, 0.610 * H, "bold ");
   }
 
-  ctx.fillStyle = "#141210";
-  ctx.textBaseline = "top";
-  let y = y0 + pad;
-  lines.forEach((line, i) => {
-    const isTypeLine = printedTypeLine && i === 0;
-    ctx.font = `${isTypeLine ? "italic bold " : ""}${fontSize}px Georgia, "Times New Roman", serif`;
-    ctx.fillText(line, x0 + pad, y, boxW);
-    y += fontSize * 1.25;
-  });
+  if (tr.text) {
+    const x0 = 0.07 * W, x1 = 0.93 * W;
+    const y0 = 0.615 * H, y1 = 0.925 * H;
+    const pad = 0.018 * W;
+    parchment(x0, y0, x1, y1);
+
+    const boxW = x1 - x0 - 2 * pad;
+    const boxH = y1 - y0 - 2 * pad;
+
+    // Shrink font size until the text fits the box
+    let fontSize = 0.034 * H;
+    let lines;
+    for (;;) {
+      ctx.font = `${fontSize}px Georgia, "Times New Roman", serif`;
+      lines = wrapText(ctx, tr.text, boxW);
+      if (lines.length * fontSize * 1.25 <= boxH || fontSize < 0.012 * H) break;
+      fontSize *= 0.93;
+    }
+
+    ctx.fillStyle = "#141210";
+    ctx.textBaseline = "top";
+    let y = y0 + pad;
+    for (const line of lines) {
+      ctx.fillText(line, x0 + pad, y, boxW);
+      y += fontSize * 1.25;
+    }
+  }
 
   return canvas.toDataURL("image/jpeg", 0.92);
 }
@@ -391,51 +578,59 @@ function bitmapToDataUrl(bitmap) {
  * Card pipeline: english card + language -> entry with images
  * ---------------------------------------------------------- */
 
-async function buildCardEntry(englishCard, lang, localized) {
-  let status = "localized";
-  let displayCard = englishCard;
-  let textCard = null;
+// Layouts whose frame geometry matches the standard overlay regions.
+// Others (split, flip, adventure, saga, class…) keep the English scan.
+const OVERLAY_LAYOUTS = new Set(["normal", "transform", "modal_dfc", "meld"]);
 
-  if (lang !== "en") {
-    localized = localized || { imageCard: null, textCard: null };
-    if (localized.imageCard) {
-      displayCard = localized.imageCard;
-      status = "localized";
-    } else if (localized.textCard) {
-      displayCard = englishCard;
-      textCard = localized.textCard;
-      status = "overlay";
-    } else {
-      displayCard = englishCard;
-      status = "english";
-    }
+async function buildCardEntry(englishCard, lang, loc, eng) {
+  const engPrints = eng?.prints?.length ? eng.prints : [englishCard];
+  let prints, status, overlayTexts = null;
+
+  if (lang === "en") {
+    prints = engPrints;
+    status = "localized";
+  } else if (loc?.prints?.length) {
+    prints = loc.prints;
+    status = "localized";
+  } else if (OVERLAY_LAYOUTS.has(englishCard.layout)) {
+    prints = engPrints;
+    const { texts, usedMT } = await resolveTranslations(englishCard, lang, loc);
+    overlayTexts = texts;
+    status = usedMT ? "mt" : "overlay";
+  } else {
+    prints = engPrints;
+    status = "english";
   }
 
-  const urls = faceImageUrls(displayCard);
-  if (urls.length === 0) throw new Error(`No image available for ${englishCard.name}`);
+  const entry = { prints, printIndex: 0, status, overlayTexts };
+  entry.faces = await buildFaces(entry);
+  entry.printedName = overlayTexts?.[0]?.name || loc?.fields?.[0]?.name ||
+    prints[0].printed_name || prints[0].card_faces?.[0]?.printed_name ||
+    englishCard.name;
+  return entry;
+}
+
+// Render the faces of the currently selected printing (also used when the
+// user picks another printing from the dropdown).
+async function buildFaces(entry) {
+  const print = entry.prints[entry.printIndex];
+  const urls = faceImageUrls(print);
+  if (urls.length === 0) throw new Error(`No image available for ${print.name}`);
+  const printFaces = print.card_faces?.length ? print.card_faces : [print];
 
   const faces = [];
   for (let i = 0; i < urls.length; i++) {
     const bitmap = await loadImage(urls[i]);
-    if (status === "overlay") {
-      const face = textCard.card_faces?.[i] || textCard;
-      const text = face.printed_text || face.oracle_text || textCard.printed_text || "";
-      const typeLine = face.printed_type_line || "";
-      if (text) {
-        faces.push(drawWithOverlay(bitmap, text, typeLine));
-      } else {
-        faces.push(bitmapToDataUrl(bitmap));
-      }
+    const tr = entry.overlayTexts?.[i];
+    if (tr && (tr.name || tr.type || tr.text)) {
+      const mana = (printFaces[i]?.mana_cost || "").match(/{[^}]+}/g)?.length || 0;
+      faces.push(drawWithOverlay(bitmap, tr, mana));
     } else {
       faces.push(bitmapToDataUrl(bitmap));
     }
     bitmap.close?.();
   }
-
-  const nameSource = textCard || displayCard;
-  const printedName = nameSource.printed_name ||
-    nameSource.card_faces?.[0]?.printed_name || englishCard.name;
-  return { status, faces, printedName };
+  return faces;
 }
 
 /* ------------------------------------------------------------
@@ -452,13 +647,25 @@ async function loadEntries(entries, lang) {
   const uniqueNames = [...new Set(entries.map((e) => e.name))];
   const { found } = await resolveCards(uniqueNames);
 
+  const oracleIds = [...new Set(
+    entries.map((e) => found.get(e.name.toLowerCase())?.oracle_id).filter(Boolean)
+  )];
+
   let localizedMap = new Map();
   if (lang !== "en") {
-    setStatus(`Looking up ${lang} printings…`, 0.08);
-    const oracleIds = [...new Set(
-      entries.map((e) => found.get(e.name.toLowerCase())?.oracle_id).filter(Boolean)
-    )];
+    setStatus(`Looking up ${lang} printings…`, 0.06);
     localizedMap = await findLocalizedBatch(oracleIds, lang);
+  }
+
+  // English print lists: needed as the display fallback for cards without a
+  // usable localized scan, and as the printing choices when lang is English.
+  const needEnglish = lang === "en"
+    ? oracleIds
+    : oracleIds.filter((id) => !localizedMap.get(id)?.prints?.length);
+  let englishMap = new Map();
+  if (needEnglish.length > 0) {
+    setStatus("Looking up printings…", 0.09);
+    englishMap = await findLocalizedBatch(needEnglish, "en");
   }
 
   const total = entries.length;
@@ -471,7 +678,8 @@ async function loadEntries(entries, lang) {
     const englishCard = found.get(entry.name.toLowerCase());
     if (!englishCard) { failed.push(entry); continue; }
     try {
-      const built = await buildCardEntry(englishCard, lang, localizedMap.get(englishCard.oracle_id));
+      const built = await buildCardEntry(englishCard, lang,
+        localizedMap.get(englishCard.oracle_id), englishMap.get(englishCard.oracle_id));
       cards.push({ name: entry.name, qty: entry.qty, section: entry.section, ...built });
     } catch (e) {
       console.error(`Failed to build ${entry.name}:`, e);
@@ -556,7 +764,8 @@ async function onRetryFailed() {
 const BADGES = {
   localized: { cls: "badge-localized", label: "✓", title: "Found in the chosen language" },
   overlay: { cls: "badge-overlay", label: "T", title: "English scan with official translated text" },
-  english: { cls: "badge-english", label: "EN", title: "Never printed in the chosen language" },
+  mt: { cls: "badge-mt", label: "MT", title: "No official translation found — machine-translated (Google Translate)" },
+  english: { cls: "badge-english", label: "EN", title: "Kept in English (unusual card frame)" },
 };
 
 function renderGrid() {
@@ -617,6 +826,34 @@ function makeTile(card) {
     });
   }
   tile.appendChild(img);
+
+  if (card.prints.length > 1) {
+    const sel = document.createElement("select");
+    sel.className = "print-select";
+    sel.title = "Choose the printing to use";
+    card.prints.forEach((p, i) => {
+      const opt = document.createElement("option");
+      opt.value = i;
+      opt.textContent = `${p.set.toUpperCase()} #${p.collector_number} · ${p.set_name}`;
+      opt.selected = i === card.printIndex;
+      sel.appendChild(opt);
+    });
+    sel.addEventListener("change", async () => {
+      card.printIndex = Number(sel.value);
+      sel.disabled = true;
+      img.style.opacity = "0.4";
+      try {
+        card.faces = await buildFaces(card);
+        img.src = card.faces[0];
+      } catch (e) {
+        console.error(e);
+        setStatus(`Could not load that printing of ${card.name}: ${e.message}`, null, true);
+      }
+      img.style.opacity = "";
+      sel.disabled = false;
+    });
+    tile.appendChild(sel);
+  }
 
   const nameEl = document.createElement("div");
   nameEl.className = "card-name";

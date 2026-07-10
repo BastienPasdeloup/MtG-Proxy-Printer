@@ -9,17 +9,25 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    (or paste a plain-text decklist).
 2. Pick a **language**.
 3. Click **Load Cards** — card images are fetched from [Scryfall](https://scryfall.com) in the chosen language.
-4. Adjust the deck: remove cards, change quantities (double-faced cards: click to flip).
+4. Adjust the deck: remove cards, change quantities, pick another printing from the dropdown
+   under each card (double-faced cards: click the image to flip).
 5. Click **Generate Proxies** — downloads an A4 PDF with 9 cards per page, each 62 × 87 mm, with cut marks.
+   If the deck contains double-sided cards, you are asked whether to print backs too.
    Print at **100% scale** (no "fit to page").
 
 ## Language fallback
 
-- If the card exists in the chosen language, that printing's most recent scan is used (green badge).
-- If the card was printed in the language but Scryfall has no usable scan, the English card is used and
-  its text box is replaced with the **official translated text** from Scryfall's printed-card data (blue badge).
-- If the card was never printed in the chosen language, no official translation exists;
-  the English card is used as-is (gray badge).
+Every card ends up in the chosen language:
+
+- If the card exists in the chosen language, a scan of a real printing is used, preferring
+  classic-frame versions over promos/showcase/Universes Beyond (green ✓ badge).
+- Otherwise the English scan is used and its **name, type line and text box** are repainted with the
+  translation, resolved in this order:
+  1. official printed text from Scryfall's localized print data (blue **T** badge),
+  2. official Gatherer translations via api.magicthegathering.io (blue **T** badge),
+  3. Google Translate machine translation, with official type-word vocabulary (orange **MT** badge).
+- Cards with non-standard frames (split, adventure, sagas…) keep the English scan when no localized
+  print exists (gray **EN** badge) — the overlay geometry would not match.
 
 ## Technical notes
 
