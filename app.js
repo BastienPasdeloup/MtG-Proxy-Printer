@@ -343,9 +343,94 @@ const MTGIO_LANG = {
   pt: "Portuguese (Brazil)", ja: "Japanese", ko: "Korean", ru: "Russian",
   zhs: "Chinese Simplified", zht: "Chinese Traditional",
 };
+/* Machine-translation providers (all free and CORS-enabled). The one chosen
+ * in the "Translator" dropdown is tried first; the others act as fallback. */
+
 const GOOGLE_LANG = {
   fr: "fr", de: "de", it: "it", es: "es", pt: "pt", ja: "ja", ko: "ko",
   ru: "ru", zhs: "zh-CN", zht: "zh-TW",
+};
+const BING_LANG = {
+  fr: "fr", de: "de", it: "it", es: "es", pt: "pt", ja: "ja", ko: "ko",
+  ru: "ru", zhs: "zh-Hans", zht: "zh-Hant",
+};
+const MYMEMORY_LANG = {
+  fr: "fr", de: "de", it: "it", es: "es", pt: "pt-BR", ja: "ja", ko: "ko",
+  ru: "ru", zhs: "zh-CN", zht: "zh-TW",
+};
+
+async function googleTranslateImpl(text, lang) {
+  const url = "https://translate.googleapis.com/translate_a/single" +
+    `?client=gtx&sl=en&tl=${GOOGLE_LANG[lang]}&dt=t&q=${encodeURIComponent(text)}`;
+  const resp = await fetchRetry(url, undefined, 3);
+  if (!resp.ok) throw new Error(`Google Translate error (HTTP ${resp.status})`);
+  const data = await resp.json();
+  return (data[0] || []).map((seg) => seg[0]).join("");
+}
+
+// Microsoft Translator, via the token endpoint used by the Edge browser
+let bingToken = null;
+let bingTokenTime = 0;
+async function bingTranslateImpl(text, lang) {
+  if (!bingToken || Date.now() - bingTokenTime > 8 * 60 * 1000) {
+    const auth = await fetchRetry("https://edge.microsoft.com/translate/auth", undefined, 2);
+    if (!auth.ok) throw new Error("Microsoft Translator auth failed");
+    bingToken = await auth.text();
+    bingTokenTime = Date.now();
+  }
+  const url = "https://api-edge.cognitive.microsofttranslator.com/translate" +
+    `?api-version=3.0&from=en&to=${BING_LANG[lang]}`;
+  const resp = await fetchRetry(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${bingToken}` },
+    body: JSON.stringify([{ Text: text }]),
+  }, 2);
+  if (!resp.ok) throw new Error(`Microsoft Translator error (HTTP ${resp.status})`);
+  const data = await resp.json();
+  const out = data?.[0]?.translations?.[0]?.text;
+  if (!out) throw new Error("Microsoft Translator: empty result");
+  return out;
+}
+
+function decodeHtmlEntities(s) {
+  const el = document.createElement("textarea");
+  el.innerHTML = s;
+  return el.value;
+}
+
+async function myMemoryTranslateImpl(text, lang) {
+  // MyMemory rejects long queries: translate in <=450-char line groups
+  const chunks = [];
+  let current = "";
+  for (const line of text.split("\n")) {
+    if (current && (current.length + line.length + 1) > 450) {
+      chunks.push(current);
+      current = line;
+    } else {
+      current = current ? `${current}\n${line}` : line;
+    }
+  }
+  if (current) chunks.push(current);
+
+  const out = [];
+  for (const chunk of chunks) {
+    const url = "https://api.mymemory.translated.net/get" +
+      `?q=${encodeURIComponent(chunk)}&langpair=en|${MYMEMORY_LANG[lang]}`;
+    const resp = await fetchRetry(url, undefined, 2);
+    if (!resp.ok) throw new Error(`MyMemory error (HTTP ${resp.status})`);
+    const data = await resp.json();
+    const t = data.responseData?.translatedText;
+    if (!t || data.responseStatus !== 200) throw new Error("MyMemory: no translation");
+    out.push(decodeHtmlEntities(t));
+    await sleep(150);
+  }
+  return out.join("\n");
+}
+
+const MT_PROVIDERS = {
+  google: { label: "Google Translate", fn: googleTranslateImpl },
+  bing: { label: "Microsoft Translator", fn: bingTranslateImpl },
+  mymemory: { label: "MyMemory", fn: myMemoryTranslateImpl },
 };
 
 async function mtgioLookup(faceName, lang) {
@@ -427,19 +512,27 @@ const TYPE_SEP = { fr: " : " };
 async function translateTypeLine(typeLine, lang) {
   const [types, subtypes] = typeLine.split(/\s+—\s+/);
   const official = TYPE_DICT[lang]?.[types];
-  if (!official) return { text: await googleTranslate(typeLine, lang), mt: true };
+  if (!official) return { text: await machineTranslate(typeLine, lang), mt: true };
   if (!subtypes) return { text: official, mt: false };
-  const sub = await googleTranslate(subtypes, lang);
+  const sub = await machineTranslate(subtypes, lang);
   return { text: official + (TYPE_SEP[lang] || " — ") + sub, mt: true };
 }
 
-async function googleTranslate(text, lang) {
-  const url = "https://translate.googleapis.com/translate_a/single" +
-    `?client=gtx&sl=en&tl=${GOOGLE_LANG[lang]}&dt=t&q=${encodeURIComponent(text)}`;
-  const resp = await fetchRetry(url);
-  if (!resp.ok) throw new Error(`Translation service error (HTTP ${resp.status})`);
-  const data = await resp.json();
-  return (data[0] || []).map((seg) => seg[0]).join("");
+// Machine-translate with the provider chosen in the "Translator" dropdown,
+// falling back to the other providers if it fails.
+async function machineTranslate(text, lang) {
+  const selected = $("translator").value || "google";
+  const order = [selected, ...Object.keys(MT_PROVIDERS).filter((k) => k !== selected)];
+  let lastError = null;
+  for (const key of order) {
+    try {
+      return await MT_PROVIDERS[key].fn(text, lang);
+    } catch (e) {
+      console.warn(`${MT_PROVIDERS[key].label} failed:`, e);
+      lastError = e;
+    }
+  }
+  throw lastError || new Error("All translators failed");
 }
 
 // Build per-face {name, type, text} in the target language.
@@ -465,13 +558,13 @@ async function resolveTranslations(englishCard, lang, loc) {
       }
     }
     try {
-      if (!t.name) { t.name = await googleTranslate(face.name, lang); usedMT = true; }
+      if (!t.name) { t.name = await machineTranslate(face.name, lang); usedMT = true; }
       if (!t.type && face.type_line) {
         const tl = await translateTypeLine(face.type_line, lang);
         t.type = tl.text;
         usedMT = usedMT || tl.mt;
       }
-      if (!t.text && face.oracle_text) { t.text = await googleTranslate(face.oracle_text, lang); usedMT = true; }
+      if (!t.text && face.oracle_text) { t.text = await machineTranslate(face.oracle_text, lang); usedMT = true; }
     } catch (e) {
       console.error(`Machine translation failed for ${face.name}:`, e);
     }
@@ -1040,7 +1133,7 @@ async function onRetryFailed() {
 const BADGES = {
   localized: { cls: "badge-localized", label: "✓", title: "Found in the chosen language" },
   overlay: { cls: "badge-overlay", label: "T", title: "English scan with official translated text" },
-  mt: { cls: "badge-mt", label: "MT", title: "No official translation found — machine-translated (Google Translate)" },
+  mt: { cls: "badge-mt", label: "MT", title: "No official translation found — machine-translated with the selected translator" },
   english: { cls: "badge-english", label: "EN", title: "Kept in English (unusual card frame)" },
 };
 
