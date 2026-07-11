@@ -46,12 +46,21 @@
         <div>
           <label for="translator">Translator <span class="hint">(for MT cards)</span></label>
           <select id="translator">
-            <option value="ai" selected>AI (MtG-aware)</option>
-            <option value="google">Google Translate</option>
-            <option value="bing">Microsoft Translator</option>
-            <option value="mymemory">MyMemory</option>
+            <option value="ai" selected>AI (MtG-aware) [speed ★☆☆ / quality ★★★]</option>
+            <option value="google">Google Translate [speed ★★★ / quality ★★☆]</option>
+            <option value="bing">Microsoft Translator [speed ★★★ / quality ★☆☆]</option>
+            <option value="mymemory">MyMemory [speed ★★☆ / quality ★☆☆]</option>
           </select>
         </div>
+        <div id="version-wrap" class="hidden moxfield-only">
+          <label for="preferred-version">Preferred version</label>
+          <select id="preferred-version">
+            <option value="moxfield">As on Moxfield (same artworks, more translated cards)</option>
+            <option value="language" selected>Chosen language (more alternate artworks, fewer translated cards)</option>
+          </select>
+        </div>
+      </div>
+      <div class="control-row inline">
         <div>
           <label for="include-sideboard">Sideboard</label>
           <select id="include-sideboard">
@@ -66,13 +75,8 @@
             <option value="yes">Include</option>
           </select>
         </div>
-        <div id="version-wrap" class="hidden moxfield-only">
-          <label for="preferred-version">Preferred version</label>
-          <select id="preferred-version">
-            <option value="moxfield">As on Moxfield (same artworks, more translated cards)</option>
-            <option value="language" selected>Chosen language (more alternate artworks, fewer translated cards)</option>
-          </select>
-        </div>
+      </div>
+      <div class="control-row">
         <button id="load-btn" class="primary">Load Cards</button>
       </div>
 

@@ -437,18 +437,39 @@ const LANG_NAME = {
 };
 
 const MTG_GLOSSARY = {
-  fr: 'Examples of official French MTG vocabulary: tap = engager ("{T} :"), ' +
-    "untap = dégager, target = ciblé(e), battlefield = champ de bataille, " +
-    "graveyard = cimetière, library = bibliothèque, hand = main, " +
-    "exile = exiler, cast = lancer, spell = sort, ability = capacité, " +
+  fr: "Official French MTG vocabulary (use these exact terms): " +
+    'land = terrain (NEVER "terre"), play a land = jouer un terrain, ' +
+    "this land = ce terrain, basic land = terrain de base, " +
+    'tap = engager ("{T} :"), untap = dégager, tapped = engagé, ' +
+    "target = ciblé(e) (after the noun: 'la créature ciblée'), " +
+    "any target = n'importe quelle cible, " +
+    "deals N damage = inflige N blessures (damage = blessures, NEVER " +
+    '"dégâts"), prevent damage = prévenir les blessures, ' +
+    "battlefield = champ de bataille, graveyard = cimetière, " +
+    "library = bibliothèque, hand = main, exile = exiler, " +
+    "cast = lancer, spell = sort, ability = capacité, " +
     "counter target spell = contrecarrez le sort ciblé, " +
     "+1/+1 counter = marqueur +1/+1, age counter = marqueur « âge », " +
-    "draw a card = piochez une carte, discard = se défausser, " +
-    "sacrifice = sacrifier, destroy = détruire, upkeep = entretien, " +
+    "draw a card = piochez une carte, discard = se défausser de, " +
+    "sacrifice = sacrifier, destroy = détruire, return = renvoyer, " +
+    "search your library = cherchez dans votre bibliothèque, " +
+    "shuffle = mélanger, reveal = révéler, upkeep = entretien, " +
     "cumulative upkeep = entretien cumulatif, end step = étape de fin, " +
-    "damage = blessures, life = points de vie, token = jeton, " +
-    "enters = arrive sur le champ de bataille, " +
-    "until end of turn = jusqu'à la fin du tour, add {C} = ajoutez {C}.",
+    "at the beginning of = au début de, combat = combat, " +
+    "attacking creature = créature attaquante, block = bloquer, " +
+    "controller = contrôleur, owner = propriétaire, " +
+    "opponent = adversaire, player = joueur, " +
+    "gain N life = gagnez N points de vie, lose N life = perdez N " +
+    "points de vie, pay N life = payez N points de vie, " +
+    "token = jeton, copy = copie, permanent = permanent, " +
+    "enters = arrive sur le champ de bataille, leaves = quitte, " +
+    "dies = meurt, until end of turn = jusqu'à la fin du tour, " +
+    "at end of turn = à la fin du tour, add {C} = ajoutez {C}, " +
+    "flying = vol, first strike = initiative, deathtouch = contact " +
+    "mortel, trample = piétinement, haste = célérité, " +
+    "vigilance = vigilance, lifelink = lien de vie, reach = portée, " +
+    "menace = menace, defender = défenseur, flash = flash, " +
+    "hexproof = défense talismanique, scry = regard, mill = meuler.",
 };
 
 async function aiTranslateImpl(text, lang) {
@@ -458,6 +479,9 @@ async function aiTranslateImpl(text, lang) {
     "EXACTLY the official game terminology printed on localized " +
     `${LANG_NAME[lang]} MTG cards. ${MTG_GLOSSARY[lang] || ""} ` +
     "Preserve line breaks and symbols in braces like {T}, {2}, {W/U} exactly. " +
+    `The text may contain card names already translated into ${LANG_NAME[lang]}: ` +
+    "reproduce them VERBATIM in your translation, never paraphrase them away " +
+    '(e.g. never replace a card name with "this creature" or "ce terrain"). ' +
     "Output ONLY the translation, nothing else.";
   const resp = await fetchRetry("https://text.pollinations.ai/openai", {
     method: "POST",
@@ -618,7 +642,20 @@ async function resolveTranslations(englishCard, lang, loc) {
         t.type = tl.text;
         usedMT = usedMT || tl.mt;
       }
-      if (!t.text && face.oracle_text) { t.text = await machineTranslate(face.oracle_text, lang); usedMT = true; }
+      if (!t.text && face.oracle_text) {
+        // Cards referring to themselves: substitute the translated name
+        // (already resolved above) before translating the rules text.
+        let src = face.oracle_text;
+        if (t.name && t.name !== face.name) {
+          src = src.split(face.name).join(t.name);
+          const short = face.name.split(",")[0].trim();
+          if (short && short !== face.name) {
+            src = src.split(short).join(t.name.split(",")[0].trim());
+          }
+        }
+        t.text = await machineTranslate(src, lang);
+        usedMT = true;
+      }
     } catch (e) {
       console.error(`Machine translation failed for ${face.name}:`, e);
     }

@@ -41,12 +41,12 @@ main { max-width: 1100px; margin: 0 auto; padding: 1rem; }
 }
 
 .control-row { margin-bottom: 1rem; }
+.control-row:last-child { margin-bottom: 0; }
 .control-row.inline {
   display: flex;
   gap: 1rem;
   align-items: flex-end;
   flex-wrap: wrap;
-  margin-bottom: 0;
 }
 
 label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 0.3rem; }
@@ -302,3 +302,6 @@ footer a { color: var(--accent); }
 
 .legend-note { color: var(--muted); font-size: 0.85rem; margin: 0.6rem 0 0; }
 
+
+#version-wrap { flex: 1 1 240px; min-width: 220px; }
+#preferred-version { width: 100%; }
