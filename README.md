@@ -33,7 +33,8 @@ Every card ends up in the chosen language:
   2. official Gatherer translations via api.magicthegathering.io (blue **T** badge),
   3. machine translation — an MtG-aware AI translator (default), Google Translate, Microsoft Translator or MyMemory, selectable in the UI —
      with official type-word vocabulary (orange **MT** badge).
-- Cards with non-standard frames (split, adventure, sagas…) keep the English scan when no localized
+- Split and adventure cards get dedicated overlay layouts (split cards are shown rotated). Cards with
+  other non-standard frames (sagas, classes, flip cards…) keep the English scan when no localized
   print exists (gray **EN** badge) — the overlay geometry would not match.
 
 ## Technical notes

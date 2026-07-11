@@ -735,6 +735,12 @@ function atomize(paragraph) {
   return atoms;
 }
 
+// Borderless parchment fill, for blanking leftover original text
+function paintPatch(ctx, x0, y0, x1, y1) {
+  ctx.fillStyle = "#f3eedf";
+  ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+}
+
 function paintParchment(ctx, W, x0, y0, x1, y1) {
   ctx.fillStyle = "#f3eedf"; // fully opaque or the English text ghosts through
   ctx.strokeStyle = "rgba(60, 50, 30, 0.65)";
@@ -838,10 +844,22 @@ function paintTextBox(ctx, W, baseFontSize, text, x0, y0, x1, y1) {
   }
 }
 
+// Draw a mana cost with the official symbol images, right-aligned at xRight.
+function drawManaCost(ctx, manaCost, xRight, yCenter, size) {
+  const syms = (manaCost || "").match(/\{([^}]+)\}/g) || [];
+  let x = xRight - syms.length * size * 1.1;
+  for (const s of syms) {
+    const img = symbolFor(s.replace(/[{}]/g, ""));
+    if (img) ctx.drawImage(img, x, yCenter - size / 2, size, size);
+    x += size * 1.1;
+  }
+}
+
 // Draw the English card, then paint the translated name, type line and
 // rules text over their respective areas of a standard modern frame.
 // `manaSymbols` = number of mana symbols, kept uncovered in the title bar.
-function drawWithOverlay(bitmap, tr, manaSymbols) {
+// `hasPT` shrinks the text box so the power/toughness box stays visible.
+function drawWithOverlay(bitmap, tr, manaSymbols, hasPT) {
   const W = bitmap.width, H = bitmap.height;
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
@@ -858,7 +876,62 @@ function drawWithOverlay(bitmap, tr, manaSymbols) {
     paintBarText(ctx, W, tr.type, 0.068 * W, 0.563 * H, 0.872 * W, 0.610 * H, "bold ");
   }
   if (tr.text) {
-    paintTextBox(ctx, W, 0.034 * H, tr.text, 0.07 * W, 0.615 * H, 0.93 * W, 0.925 * H);
+    if (hasPT) {
+      // Shrink the box above the P/T (kept visible), and blank the original
+      // text bottom left of it with a borderless patch
+      paintPatch(ctx, 0.07 * W, 0.868 * H, 0.72 * W, 0.922 * H);
+      paintTextBox(ctx, W, 0.034 * H, tr.text, 0.07 * W, 0.615 * H, 0.93 * W, 0.885 * H);
+    } else {
+      paintTextBox(ctx, W, 0.034 * H, tr.text, 0.07 * W, 0.615 * H, 0.93 * W, 0.925 * H);
+    }
+  }
+
+  return canvas.toDataURL("image/jpeg", 0.92);
+}
+
+// Adventure cards: the text area is split into the adventure half (left
+// column, with its own name/type/mana) and the creature text (right column).
+// Region fractions calibrated on Scryfall "large" adventure scans.
+function drawAdventureOverlay(bitmap, texts, engFaces, hasPT) {
+  const W = bitmap.width, H = bitmap.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(bitmap, 0, 0);
+
+  const creature = texts[0] || {}, adventure = texts[1] || {};
+  const creatureMana = (engFaces[0]?.mana_cost || "").match(/{[^}]+}/g)?.length || 0;
+
+  // Creature: standard name and type bars, text in the right column
+  if (creature.name) {
+    const x1 = (creatureMana > 0 ? 0.925 - creatureMana * 0.052 - 0.012 : 0.93) * W;
+    paintBarText(ctx, W, creature.name, 0.068 * W, 0.048 * H, x1, 0.100 * H, "bold ");
+  }
+  if (creature.type) {
+    paintBarText(ctx, W, creature.type, 0.068 * W, 0.563 * H, 0.872 * W, 0.610 * H, "bold ");
+  }
+  // Adventure half (left column): name bar with the adventure's own mana
+  // cost redrawn beside it, then type bar and text
+  if (adventure.name) {
+    paintBarText(ctx, W, adventure.name, 0.078 * W, 0.622 * H, 0.512 * W, 0.672 * H, "bold ");
+    paintParchment(ctx, W, 0.512 * W, 0.622 * H, 0.640 * W, 0.684 * H);
+    drawManaCost(ctx, engFaces[1]?.mana_cost, 0.632 * W, 0.651 * H, 0.034 * H);
+  }
+  if (adventure.type) {
+    paintBarText(ctx, W, adventure.type, 0.078 * W, 0.678 * H, 0.508 * W, 0.726 * H, "bold ");
+  }
+  if (adventure.text) {
+    paintTextBox(ctx, W, 0.028 * H, adventure.text, 0.078 * W, 0.732 * H, 0.505 * W, 0.918 * H);
+  }
+
+  // Creature text (right column): starts below the adventure header row —
+  // blank the original first line beside the header, and the flavor area
+  // above the P/T box
+  if (creature.text) {
+    paintPatch(ctx, 0.643 * W, 0.618 * H, 0.925 * W, 0.682 * H);
+    paintPatch(ctx, 0.52 * W, 0.868 * H, hasPT ? 0.72 * W : 0.925 * W, 0.922 * H);
+    const y1 = hasPT ? 0.885 : 0.915;
+    paintTextBox(ctx, W, 0.028 * H, creature.text, 0.52 * W, 0.678 * H, 0.925 * W, y1 * H);
   }
 
   return canvas.toDataURL("image/jpeg", 0.92);
@@ -913,9 +986,9 @@ function bitmapToDataUrl(bitmap) {
  * ---------------------------------------------------------- */
 
 // Layouts whose frame geometry supports the translation overlay: standard
-// frames, plus split cards (drawn rotated with per-half regions).
-// Others (flip, adventure, saga, class…) keep the English scan.
-const OVERLAY_LAYOUTS = new Set(["normal", "transform", "modal_dfc", "meld", "split"]);
+// frames, split cards (drawn rotated with per-half regions) and adventures
+// (two-column text area). Others (flip, saga, class…) keep the English scan.
+const OVERLAY_LAYOUTS = new Set(["normal", "transform", "modal_dfc", "meld", "split", "adventure"]);
 
 async function buildCardEntry(englishCard, lang, loc, eng, prefPrint, versionMode = "language") {
   const langPrints = lang === "en" ? [] : (loc?.prints || []);
@@ -1023,13 +1096,26 @@ async function buildFaces(entry) {
     return [canvas.toDataURL("image/jpeg", 0.92)];
   }
 
+  // Adventure cards: one image, two faces (creature + adventure column)
+  if (entry.english.layout === "adventure" && needsOverlay && entry.overlayTexts) {
+    const engFaces = entry.english.card_faces || [];
+    await preloadSymbols([{ text: engFaces[1]?.mana_cost || "" }]);
+    const bitmap = await loadImage(urls[0]);
+    const hasPT = engFaces[0]?.power != null;
+    const face = drawAdventureOverlay(bitmap, entry.overlayTexts, engFaces, hasPT);
+    bitmap.close?.();
+    return [face];
+  }
+
+  const engFaces = entry.english.card_faces?.length ? entry.english.card_faces : [entry.english];
   const faces = [];
   for (let i = 0; i < urls.length; i++) {
     const bitmap = await loadImage(urls[i]);
     const tr = needsOverlay ? entry.overlayTexts?.[i] : null;
     if (tr && (tr.name || tr.type || tr.text)) {
       const mana = (printFaces[i]?.mana_cost || "").match(/{[^}]+}/g)?.length || 0;
-      faces.push(drawWithOverlay(bitmap, tr, mana));
+      const hasPT = engFaces[i]?.power != null;
+      faces.push(drawWithOverlay(bitmap, tr, mana, hasPT));
     } else {
       faces.push(bitmapToDataUrl(bitmap));
     }
