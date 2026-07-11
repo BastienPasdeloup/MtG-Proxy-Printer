@@ -8,7 +8,9 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
 1. Paste a **Moxfield** (`moxfield.com/decks/…`) or **MTGTop8** (`mtgtop8.com/event?e=…&d=…`) deck URL
    (or paste a plain-text decklist).
 2. Pick a **language**, and choose whether to include the sideboard, the **tokens** (and emblems)
-   created by the deck's cards (excluded by default) and, for Moxfield decks,
+   created by the deck's cards (excluded by default — they appear in their own category at the
+   end of the grid, translated like any other card, and disappear automatically when their last
+   producing card is removed) and, for Moxfield decks,
    the "Considering" board. For Moxfield decks, a **Preferred version** dropdown chooses between
    keeping the exact printings from the Moxfield page (same artworks, more text-overlay
    translations) or swapping to printings in the chosen language when the Moxfield one
@@ -34,9 +36,10 @@ Every card ends up in the chosen language:
   2. official Gatherer translations via api.magicthegathering.io (blue **T** badge),
   3. machine translation — an MtG-aware AI translator (default), Google Translate, Microsoft Translator or MyMemory, selectable in the UI —
      with official type-word vocabulary (orange **MT** badge).
-- Split and adventure cards get dedicated overlay layouts (split cards are shown rotated). Cards with
-  other non-standard frames (sagas, classes, flip cards…) keep the English scan when no localized
-  print exists (gray **EN** badge) — the overlay geometry would not match.
+- Split cards, adventure cards and tokens/emblems get dedicated overlay layouts (split cards are
+  shown rotated). Cards with other non-standard frames (sagas, classes, flip cards…) keep the
+  English scan when no localized print exists (gray **EN** badge) — the overlay geometry would
+  not match.
 
 ## Technical notes
 

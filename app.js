@@ -549,8 +549,16 @@ const TYPE_DICT = {
     "Artifact Land": "Terrain-artefact", "Snow Land": "Terrain neigeux",
     "Legendary Artifact Creature": "Créature-artefact légendaire",
     "World Enchantment": "Enchantement de monde",
+    "Token Creature": "Créature-jeton", "Token Artifact": "Artefact-jeton",
+    "Token Enchantment": "Enchantement-jeton",
+    "Token Artifact Creature": "Créature-artefact-jeton",
+    "Token Enchantment Creature": "Créature-enchantement-jeton",
+    "Token Legendary Creature": "Créature-jeton légendaire",
+    "Legendary Token Creature": "Créature-jeton légendaire",
+    "Emblem": "Emblème",
   },
   de: {
+    "Emblem": "Emblem",
     "Land": "Land", "Creature": "Kreatur", "Artifact": "Artefakt",
     "Enchantment": "Verzauberung", "Instant": "Spontanzauber", "Sorcery": "Hexerei",
     "Planeswalker": "Planeswalker", "Basic Land": "Standardland",
@@ -558,6 +566,7 @@ const TYPE_DICT = {
     "Legendary Artifact": "Legendäres Artefakt", "Artifact Creature": "Artefaktkreatur",
   },
   es: {
+    "Emblem": "Emblema",
     "Land": "Tierra", "Creature": "Criatura", "Artifact": "Artefacto",
     "Enchantment": "Encantamiento", "Instant": "Instantáneo", "Sorcery": "Conjuro",
     "Planeswalker": "Planeswalker", "Basic Land": "Tierra básica",
@@ -565,18 +574,21 @@ const TYPE_DICT = {
     "Artifact Creature": "Criatura artefacto",
   },
   it: {
+    "Emblem": "Emblema",
     "Land": "Terra", "Creature": "Creatura", "Artifact": "Artefatto",
     "Enchantment": "Incantesimo", "Instant": "Istantaneo", "Sorcery": "Stregoneria",
     "Planeswalker": "Planeswalker", "Basic Land": "Terra Base",
     "Legendary Creature": "Creatura Leggendaria", "Artifact Creature": "Creatura Artefatto",
   },
   pt: {
+    "Emblem": "Emblema",
     "Land": "Terreno", "Creature": "Criatura", "Artifact": "Artefato",
     "Enchantment": "Encantamento", "Instant": "Mágica Instantânea", "Sorcery": "Feitiço",
     "Planeswalker": "Planeswalker", "Basic Land": "Terreno Básico",
     "Legendary Creature": "Criatura Lendária", "Artifact Creature": "Criatura Artefato",
   },
   ja: {
+    "Emblem": "紋章",
     "Land": "土地", "Creature": "クリーチャー", "Artifact": "アーティファクト",
     "Enchantment": "エンチャント", "Instant": "インスタント", "Sorcery": "ソーサリー",
     "Planeswalker": "プレインズウォーカー", "Basic Land": "基本土地",
@@ -794,7 +806,8 @@ function paintParchment(ctx, W, x0, y0, x1, y1) {
 }
 
 // Single line, shrunk to fit, vertically centered in its bar
-function paintBarText(ctx, W, text, x0, y0, x1, y1, style) {
+// (horizontally centered too with `center` — token frames center the name)
+function paintBarText(ctx, W, text, x0, y0, x1, y1, style, center = false) {
   paintParchment(ctx, W, x0, y0, x1, y1);
   const pad = 0.015 * W;
   const maxW = x1 - x0 - 2 * pad;
@@ -806,7 +819,10 @@ function paintBarText(ctx, W, text, x0, y0, x1, y1, style) {
   }
   ctx.fillStyle = "#141210";
   ctx.textBaseline = "middle";
-  ctx.fillText(text, x0 + pad, (y0 + y1) / 2, maxW);
+  const x = center
+    ? x0 + pad + Math.max(0, (maxW - ctx.measureText(text).width) / 2)
+    : x0 + pad;
+  ctx.fillText(text, x, (y0 + y1) / 2, maxW);
 }
 
 // Wrapped rules text, shrunk to fit its box, with {X} tokens drawn as
@@ -1016,6 +1032,37 @@ function drawSplitOverlay(ctx, W, H, texts, engFaces, frame) {
   }
 }
 
+// Token / emblem frame (M15 token style): centered name in a rounded bar at
+// the top, type bar and text box in the lower third (the art window is much
+// taller than on a normal card). Region fractions calibrated on Scryfall
+// "large" token scans.
+function drawTokenOverlay(bitmap, tr, hasPT) {
+  const W = bitmap.width, H = bitmap.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(bitmap, 0, 0);
+
+  if (tr.name) {
+    paintBarText(ctx, W, tr.name, 0.085 * W, 0.057 * H, 0.915 * W, 0.111 * H, "bold ", true);
+  }
+  if (tr.type) {
+    // Leave the set symbol (right side of the type bar) visible
+    paintBarText(ctx, W, tr.type, 0.075 * W, 0.686 * H, 0.865 * W, 0.744 * H, "bold ");
+  }
+  if (tr.text) {
+    if (hasPT) {
+      // Blank the original text left of the P/T box, keep the P/T visible
+      paintPatch(ctx, 0.09 * W, 0.895 * H, 0.77 * W, 0.95 * H);
+      paintTextBox(ctx, W, 0.030 * H, tr.text, 0.085 * W, 0.762 * H, 0.915 * W, 0.905 * H);
+    } else {
+      paintTextBox(ctx, W, 0.030 * H, tr.text, 0.085 * W, 0.762 * H, 0.915 * W, 0.945 * H);
+    }
+  }
+
+  return canvas.toDataURL("image/jpeg", 0.92);
+}
+
 function bitmapToDataUrl(bitmap) {
   const canvas = document.createElement("canvas");
   canvas.width = bitmap.width; canvas.height = bitmap.height;
@@ -1028,9 +1075,12 @@ function bitmapToDataUrl(bitmap) {
  * ---------------------------------------------------------- */
 
 // Layouts whose frame geometry supports the translation overlay: standard
-// frames, split cards (drawn rotated with per-half regions) and adventures
-// (two-column text area). Others (flip, saga, class…) keep the English scan.
-const OVERLAY_LAYOUTS = new Set(["normal", "transform", "modal_dfc", "meld", "split", "adventure"]);
+// frames, split cards (drawn rotated with per-half regions), adventures
+// (two-column text area) and tokens/emblems (M15 token frame). Others
+// (flip, saga, class…) keep the English scan.
+const TOKEN_LAYOUTS = new Set(["token", "double_faced_token", "emblem"]);
+const OVERLAY_LAYOUTS = new Set(["normal", "transform", "modal_dfc", "meld", "split", "adventure",
+  ...TOKEN_LAYOUTS]);
 
 async function buildCardEntry(englishCard, lang, loc, eng, prefPrint, versionMode = "language") {
   const langPrints = lang === "en" ? [] : (loc?.prints || []);
@@ -1059,7 +1109,13 @@ async function buildCardEntry(englishCard, lang, loc, eng, prefPrint, versionMod
     if (!best) best = prints.find((p) => match(p, "en"));
   }
   if (!best) {
-    best = bestOf(langPrints.length ? langPrints : engPrints);
+    let pool = langPrints.length ? langPrints : engPrints;
+    if (TOKEN_LAYOUTS.has(englishCard.layout)) {
+      // The token overlay geometry is calibrated on the M15 token frame
+      const modern = pool.filter((p) => p.frame === "2015");
+      if (modern.length) pool = modern;
+    }
+    best = bestOf(pool);
   }
 
   const entry = {
@@ -1157,7 +1213,14 @@ async function buildFaces(entry) {
     if (tr && (tr.name || tr.type || tr.text)) {
       const mana = (printFaces[i]?.mana_cost || "").match(/{[^}]+}/g)?.length || 0;
       const hasPT = engFaces[i]?.power != null;
-      faces.push(drawWithOverlay(bitmap, tr, mana, hasPT));
+      if (TOKEN_LAYOUTS.has(entry.english.layout)) {
+        // Emblems keep their title untouched: the bar shows the
+        // planeswalker's name, a proper noun that isn't translated.
+        const trTok = entry.english.layout === "emblem" ? { ...tr, name: null } : tr;
+        faces.push(drawTokenOverlay(bitmap, trTok, hasPT));
+      } else {
+        faces.push(drawWithOverlay(bitmap, tr, mana, hasPT));
+      }
     } else {
       faces.push(bitmapToDataUrl(bitmap));
     }
@@ -1247,6 +1310,11 @@ async function loadEntries(entries, lang, sortByType = false) {
   return failed;
 }
 
+// Which token/emblem printing id (as referenced in `all_parts`) belongs to
+// which token oracle_id — filled by collectTokenEntries, used to detect
+// tokens whose last producing card was removed.
+const tokenPartOracle = new Map();
+
 // Tokens (and emblems) that the given English cards can create, as
 // loadEntries entries. Scryfall lists them in each card's `all_parts`:
 // tokens have component "token"; emblems are "combo_piece" with an Emblem
@@ -1283,11 +1351,35 @@ async function collectTokenEntries(englishCards) {
   const already = new Set(cards.map((c) => c.english.oracle_id));
   const byOracle = new Map();
   for (const t of tokens) {
+    tokenPartOracle.set(t.id, t.oracle_id);
     if (!already.has(t.oracle_id) && !byOracle.has(t.oracle_id)) byOracle.set(t.oracle_id, t);
   }
   return [...byOracle.values()]
     .sort((a, b) => a.name.localeCompare(b.name) || typeRank(a) - typeRank(b))
     .map((t) => ({ name: t.name, qty: 1, section: "tokens", card: t }));
+}
+
+// Drop token-category entries whose producing cards have all been removed.
+// Matching goes through tokenPartOracle (all_parts holds printing ids, the
+// grid holds oracles); parts never seen by collectTokenEntries fall back to
+// a name match — over-keeping is safer than wrongly removing.
+function pruneOrphanTokens() {
+  if (!cards.some((c) => c.section === "tokens")) return;
+  const wantedOracles = new Set();
+  const wantedNames = new Set();
+  for (const c of cards) {
+    if (c.section === "tokens") continue;
+    for (const part of c.english.all_parts || []) {
+      if (part.id === c.english.id) continue;
+      if (part.component === "token" || (part.type_line || "").startsWith("Emblem")) {
+        const oid = tokenPartOracle.get(part.id);
+        if (oid) wantedOracles.add(oid);
+        else wantedNames.add(part.name);
+      }
+    }
+  }
+  cards = cards.filter((c) => c.section !== "tokens" ||
+    wantedOracles.has(c.english.oracle_id) || wantedNames.has(c.english.name));
 }
 
 function reportLoadResult() {
@@ -1385,10 +1477,23 @@ function renderGrid() {
   const grid = $("card-grid");
   grid.innerHTML = "";
 
-  for (const card of cards) {
+  // Tokens sit in their own category at the end; the "+" tile (add a card)
+  // comes right after the last regular card, not in the token category.
+  const regular = cards.filter((c) => c.section !== "tokens");
+  const tokens = cards.filter((c) => c.section === "tokens");
+  for (const card of regular) {
     grid.appendChild(makeTile(card));
   }
   grid.appendChild(makeAddTile());
+  if (tokens.length) {
+    const label = document.createElement("div");
+    label.className = "section-label";
+    label.textContent = "Tokens";
+    grid.appendChild(label);
+    for (const card of tokens) {
+      grid.appendChild(makeTile(card));
+    }
+  }
 
   const totalCards = cards.reduce((s, c) => s + c.qty, 0);
   const totalSlots = cards.reduce((s, c) => s + c.qty * c.faces.length, 0);
@@ -1530,6 +1635,8 @@ function makeTile(card) {
   remove.title = "Remove this card";
   remove.addEventListener("click", () => {
     cards = cards.filter((c) => c !== card);
+    // Removing a card may orphan tokens only that card produced
+    if (card.section !== "tokens") pruneOrphanTokens();
     renderGrid();
   });
 
@@ -1649,7 +1756,10 @@ async function addCustomCard(name, qty = 1) {
     : undefined;
   const eng = (await findLocalizedBatch([englishCard.oracle_id], "en")).get(englishCard.oracle_id);
   const built = await buildCardEntry(englishCard, lang, loc, eng);
-  cards.push({ name: englishCard.name, qty, section: "mainboard", ...built });
+  // Insert before the token category so display and PDF order match
+  const firstToken = cards.findIndex((c) => c.section === "tokens");
+  const insertAt = firstToken === -1 ? cards.length : firstToken;
+  cards.splice(insertAt, 0, { name: englishCard.name, qty, section: "mainboard", ...built });
 
   // If tokens are included, also add the tokens/emblems this card creates
   // (skipping any already in the grid).
