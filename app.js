@@ -479,9 +479,8 @@ async function aiTranslateImpl(text, lang) {
     "EXACTLY the official game terminology printed on localized " +
     `${LANG_NAME[lang]} MTG cards. ${MTG_GLOSSARY[lang] || ""} ` +
     "Preserve line breaks and symbols in braces like {T}, {2}, {W/U} exactly. " +
-    `The text may contain card names already translated into ${LANG_NAME[lang]}: ` +
-    "reproduce them VERBATIM in your translation, never paraphrase them away " +
-    '(e.g. never replace a card name with "this creature" or "ce terrain"). ' +
+    'The token "CARDNAME" is a placeholder for the card\'s own name: keep it ' +
+    'EXACTLY as "CARDNAME" in your output, never drop or replace it. ' +
     "Output ONLY the translation, nothing else.";
   const resp = await fetchRetry("https://text.pollinations.ai/openai", {
     method: "POST",
@@ -643,17 +642,23 @@ async function resolveTranslations(englishCard, lang, loc) {
         usedMT = usedMT || tl.mt;
       }
       if (!t.text && face.oracle_text) {
-        // Cards referring to themselves: substitute the translated name
-        // (already resolved above) before translating the rules text.
+        // Cards referring to themselves: shield the name behind a token
+        // that survives translation, then re-inject the translated name
+        // (already resolved above).
         let src = face.oracle_text;
+        let substituted = false;
         if (t.name && t.name !== face.name) {
-          src = src.split(face.name).join(t.name);
           const short = face.name.split(",")[0].trim();
-          if (short && short !== face.name) {
-            src = src.split(short).join(t.name.split(",")[0].trim());
+          if (src.includes(face.name) || (short !== face.name && src.includes(short))) {
+            src = src.split(face.name).join("CARDNAME");
+            if (short !== face.name) src = src.split(short).join("CARDNAME");
+            substituted = true;
           }
         }
         t.text = await machineTranslate(src, lang);
+        if (substituted) {
+          t.text = t.text.replace(/cardname/gi, t.name);
+        }
         usedMT = true;
       }
     } catch (e) {
