@@ -427,48 +427,64 @@ async function myMemoryTranslateImpl(text, lang) {
   return out.join("\n");
 }
 
-const DEEPL_LANG = {
-  fr: "FR", de: "DE", it: "IT", es: "ES", pt: "PT-BR", ja: "JA", ko: "KO",
-  ru: "RU", zhs: "ZH-HANS", zht: "ZH-HANT",
+// LLM-based translator (Pollinations, free and CORS-open): unlike generic
+// MT engines it can be contextualized, so the prompt teaches it the official
+// MtG vocabulary of the target language.
+const LANG_NAME = {
+  fr: "French", de: "German", it: "Italian", es: "Spanish",
+  pt: "Brazilian Portuguese", ja: "Japanese", ko: "Korean", ru: "Russian",
+  zhs: "Simplified Chinese", zht: "Traditional Chinese",
 };
 
-// DeepL needs a (free) API key and does not allow browser CORS,
-// so the request goes through a CORS proxy when the direct call fails.
-async function deeplTranslateImpl(text, lang) {
-  const key = $("deepl-key").value.trim();
-  if (!key) throw new Error("DeepL API key missing — get a free one at deepl.com/pro-api");
-  const host = key.endsWith(":fx") ? "api-free.deepl.com" : "api.deepl.com";
-  const target = `https://${host}/v2/translate`;
-  const body = new URLSearchParams({
-    auth_key: key, text, source_lang: "EN", target_lang: DEEPL_LANG[lang],
-  }).toString();
+const MTG_GLOSSARY = {
+  fr: 'Examples of official French MTG vocabulary: tap = engager ("{T} :"), ' +
+    "untap = dégager, target = ciblé(e), battlefield = champ de bataille, " +
+    "graveyard = cimetière, library = bibliothèque, hand = main, " +
+    "exile = exiler, cast = lancer, spell = sort, ability = capacité, " +
+    "counter target spell = contrecarrez le sort ciblé, " +
+    "+1/+1 counter = marqueur +1/+1, age counter = marqueur « âge », " +
+    "draw a card = piochez une carte, discard = se défausser, " +
+    "sacrifice = sacrifier, destroy = détruire, upkeep = entretien, " +
+    "cumulative upkeep = entretien cumulatif, end step = étape de fin, " +
+    "damage = blessures, life = points de vie, token = jeton, " +
+    "enters = arrive sur le champ de bataille, " +
+    "until end of turn = jusqu'à la fin du tour, add {C} = ajoutez {C}.",
+};
 
-  const attempts = [target, `https://corsproxy.io/?url=${encodeURIComponent(target)}`];
-  let lastError = null;
-  for (const url of attempts) {
-    try {
-      const resp = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body,
-      });
-      if (!resp.ok) { lastError = new Error(`DeepL error (HTTP ${resp.status})`); continue; }
-      const data = await resp.json();
-      const out = data?.translations?.[0]?.text;
-      if (out) return out;
-      lastError = new Error("DeepL: empty result");
-    } catch (e) {
-      lastError = e;
-    }
-  }
-  throw lastError || new Error("DeepL failed");
+async function aiTranslateImpl(text, lang) {
+  const system =
+    "You are an expert Magic: The Gathering card translator. Translate the " +
+    `English MTG card text given by the user into ${LANG_NAME[lang]}, using ` +
+    "EXACTLY the official game terminology printed on localized " +
+    `${LANG_NAME[lang]} MTG cards. ${MTG_GLOSSARY[lang] || ""} ` +
+    "Preserve line breaks and symbols in braces like {T}, {2}, {W/U} exactly. " +
+    "Output ONLY the translation, nothing else.";
+  const resp = await fetchRetry("https://text.pollinations.ai/openai", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "openai",
+      messages: [
+        { role: "system", content: system },
+        { role: "user", content: text },
+      ],
+    }),
+  }, 2);
+  if (!resp.ok) throw new Error(`AI translator error (HTTP ${resp.status})`);
+  const data = await resp.json();
+  let out = data?.choices?.[0]?.message?.content?.trim();
+  if (!out) throw new Error("AI translator: empty result");
+  out = out.replace(/^["«\s]+|["»\s]+$/g, "");
+  // Guard against the model chatting instead of translating
+  if (out.length > text.length * 4 + 200) throw new Error("AI translator: implausible output");
+  return out;
 }
 
 const MT_PROVIDERS = {
+  ai: { label: "AI (MtG-aware)", fn: aiTranslateImpl },
   google: { label: "Google Translate", fn: googleTranslateImpl },
   bing: { label: "Microsoft Translator", fn: bingTranslateImpl },
   mymemory: { label: "MyMemory", fn: myMemoryTranslateImpl },
-  deepl: { label: "DeepL", fn: deeplTranslateImpl },
 };
 
 async function mtgioLookup(faceName, lang) {
@@ -1568,15 +1584,6 @@ $("generate-btn").addEventListener("click", onGeneratePdf);
 $("deck-url").addEventListener("keydown", (e) => {
   if (e.key === "Enter") onLoadCards();
 });
-// DeepL needs an API key: show the field only when selected, remember the key
-$("translator").addEventListener("change", () => {
-  $("deepl-key-wrap").classList.toggle("hidden", $("translator").value !== "deepl");
-});
-$("deepl-key").value = localStorage.getItem("deeplKey") || "";
-$("deepl-key").addEventListener("input", () => {
-  localStorage.setItem("deeplKey", $("deepl-key").value.trim());
-});
-
 // The "Considering" board and version preference only exist on Moxfield
 $("deck-url").addEventListener("input", () => {
   const isMoxfield = /moxfield\.com/i.test($("deck-url").value);
