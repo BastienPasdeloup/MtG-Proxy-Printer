@@ -495,6 +495,56 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
+function paintParchment(ctx, W, x0, y0, x1, y1) {
+  ctx.fillStyle = "#f3eedf"; // fully opaque or the English text ghosts through
+  ctx.strokeStyle = "rgba(60, 50, 30, 0.65)";
+  ctx.lineWidth = Math.max(1, 0.003 * W);
+  ctx.beginPath();
+  ctx.roundRect(x0, y0, x1 - x0, y1 - y0, 0.01 * W);
+  ctx.fill();
+  ctx.stroke();
+}
+
+// Single line, shrunk to fit, vertically centered in its bar
+function paintBarText(ctx, W, text, x0, y0, x1, y1, style) {
+  paintParchment(ctx, W, x0, y0, x1, y1);
+  const pad = 0.015 * W;
+  const maxW = x1 - x0 - 2 * pad;
+  let size = (y1 - y0) * 0.62;
+  for (;;) {
+    ctx.font = `${style}${size}px Georgia, "Times New Roman", serif`;
+    if (ctx.measureText(text).width <= maxW || size < (y1 - y0) * 0.3) break;
+    size *= 0.94;
+  }
+  ctx.fillStyle = "#141210";
+  ctx.textBaseline = "middle";
+  ctx.fillText(text, x0 + pad, (y0 + y1) / 2, maxW);
+}
+
+// Wrapped rules text, shrunk to fit its box
+function paintTextBox(ctx, W, baseFontSize, text, x0, y0, x1, y1) {
+  const pad = 0.018 * W;
+  paintParchment(ctx, W, x0, y0, x1, y1);
+  const boxW = x1 - x0 - 2 * pad;
+  const boxH = y1 - y0 - 2 * pad;
+
+  let fontSize = baseFontSize;
+  let lines;
+  for (;;) {
+    ctx.font = `${fontSize}px Georgia, "Times New Roman", serif`;
+    lines = wrapText(ctx, text, boxW);
+    if (lines.length * fontSize * 1.25 <= boxH || fontSize < baseFontSize * 0.35) break;
+    fontSize *= 0.93;
+  }
+  ctx.fillStyle = "#141210";
+  ctx.textBaseline = "top";
+  let y = y0 + pad;
+  for (const line of lines) {
+    ctx.fillText(line, x0 + pad, y, boxW);
+    y += fontSize * 1.25;
+  }
+}
+
 // Draw the English card, then paint the translated name, type line and
 // rules text over their respective areas of a standard modern frame.
 // `manaSymbols` = number of mana symbols, kept uncovered in the title bar.
@@ -505,71 +555,47 @@ function drawWithOverlay(bitmap, tr, manaSymbols) {
   const ctx = canvas.getContext("2d");
   ctx.drawImage(bitmap, 0, 0);
 
-  const parchment = (x0, y0, x1, y1) => {
-    ctx.fillStyle = "#f3eedf"; // fully opaque or the English text ghosts through
-    ctx.strokeStyle = "rgba(60, 50, 30, 0.65)";
-    ctx.lineWidth = Math.max(1, 0.003 * W);
-    ctx.beginPath();
-    ctx.roundRect(x0, y0, x1 - x0, y1 - y0, 0.01 * W);
-    ctx.fill();
-    ctx.stroke();
-  };
-
-  // Single line, shrunk to fit, vertically centered in its bar
-  const drawBarText = (text, x0, y0, x1, y1, style) => {
-    parchment(x0, y0, x1, y1);
-    const pad = 0.015 * W;
-    const maxW = x1 - x0 - 2 * pad;
-    let size = (y1 - y0) * 0.62;
-    for (;;) {
-      ctx.font = `${style}${size}px Georgia, "Times New Roman", serif`;
-      if (ctx.measureText(text).width <= maxW || size < (y1 - y0) * 0.3) break;
-      size *= 0.94;
-    }
-    ctx.fillStyle = "#141210";
-    ctx.textBaseline = "middle";
-    ctx.fillText(text, x0 + pad, (y0 + y1) / 2, maxW);
-  };
-
   if (tr.name) {
     // Leave the mana cost (right side of the title bar) visible
     const x1 = (0.93 - manaSymbols * 0.048) * W;
-    drawBarText(tr.name, 0.068 * W, 0.048 * H, x1, 0.100 * H, "bold ");
+    paintBarText(ctx, W, tr.name, 0.068 * W, 0.048 * H, x1, 0.100 * H, "bold ");
   }
   if (tr.type) {
     // Leave the set symbol (right side of the type bar) visible
-    drawBarText(tr.type, 0.068 * W, 0.563 * H, 0.872 * W, 0.610 * H, "bold ");
+    paintBarText(ctx, W, tr.type, 0.068 * W, 0.563 * H, 0.872 * W, 0.610 * H, "bold ");
   }
-
   if (tr.text) {
-    const x0 = 0.07 * W, x1 = 0.93 * W;
-    const y0 = 0.615 * H, y1 = 0.925 * H;
-    const pad = 0.018 * W;
-    parchment(x0, y0, x1, y1);
-
-    const boxW = x1 - x0 - 2 * pad;
-    const boxH = y1 - y0 - 2 * pad;
-
-    // Shrink font size until the text fits the box
-    let fontSize = 0.034 * H;
-    let lines;
-    for (;;) {
-      ctx.font = `${fontSize}px Georgia, "Times New Roman", serif`;
-      lines = wrapText(ctx, tr.text, boxW);
-      if (lines.length * fontSize * 1.25 <= boxH || fontSize < 0.012 * H) break;
-      fontSize *= 0.93;
-    }
-
-    ctx.fillStyle = "#141210";
-    ctx.textBaseline = "top";
-    let y = y0 + pad;
-    for (const line of lines) {
-      ctx.fillText(line, x0 + pad, y, boxW);
-      y += fontSize * 1.25;
-    }
+    paintTextBox(ctx, W, 0.034 * H, tr.text, 0.07 * W, 0.615 * H, 0.93 * W, 0.925 * H);
   }
 
   return canvas.toDataURL("image/jpeg", 0.92);
+}
+
+// Split cards, drawn on the rotated (landscape) scan: each half is a small
+// card frame. Region fractions calibrated on Scryfall "large" split scans.
+function drawSplitOverlay(ctx, W, H, texts, engFaces) {
+  const HALVES = [
+    { x0: 0.048, x1: 0.502 },
+    { x0: 0.525, x1: 0.958 },
+  ];
+  for (let i = 0; i < HALVES.length; i++) {
+    const tr = texts[i];
+    if (!tr) continue;
+    const h = HALVES[i];
+    const mana = (engFaces[i]?.mana_cost || "").match(/{[^}]+}/g)?.length || 0;
+    if (tr.name) {
+      const x1 = (h.x1 - mana * 0.049 - 0.008) * W;
+      paintBarText(ctx, W, tr.name, (h.x0 + 0.004) * W, 0.062 * H, x1, 0.148 * H, "bold ");
+    }
+    if (tr.type) {
+      // Leave the set symbol (right end of the type bar) visible
+      paintBarText(ctx, W, tr.type, (h.x0 + 0.004) * W, 0.553 * H, (h.x1 - 0.058) * W, 0.642 * H, "bold ");
+    }
+    if (tr.text) {
+      paintTextBox(ctx, W, 0.036 * H, tr.text,
+        (h.x0 + 0.004) * W, 0.640 * H, (h.x1 - 0.005) * W, 0.955 * H);
+    }
+  }
 }
 
 function bitmapToDataUrl(bitmap) {
@@ -583,18 +609,19 @@ function bitmapToDataUrl(bitmap) {
  * Card pipeline: english card + language -> entry with images
  * ---------------------------------------------------------- */
 
-// Layouts whose frame geometry matches the standard overlay regions.
-// Others (split, flip, adventure, saga, class…) keep the English scan.
-const OVERLAY_LAYOUTS = new Set(["normal", "transform", "modal_dfc", "meld"]);
+// Layouts whose frame geometry supports the translation overlay: standard
+// frames, plus split cards (drawn rotated with per-half regions).
+// Others (flip, adventure, saga, class…) keep the English scan.
+const OVERLAY_LAYOUTS = new Set(["normal", "transform", "modal_dfc", "meld", "split"]);
 
 async function buildCardEntry(englishCard, lang, loc, eng, prefPrint) {
   const langPrints = lang === "en" ? [] : (loc?.prints || []);
   const engPrints = eng?.prints?.length ? eng.prints : [englishCard];
 
   // The dropdown offers the chosen language's printings AND the English
-  // ones (translated on the fly), newest release first.
+  // ones (translated on the fly), oldest release first.
   const prints = [...langPrints, ...engPrints]
-    .sort((a, b) => (b.released_at || "").localeCompare(a.released_at || ""));
+    .sort((a, b) => (a.released_at || "").localeCompare(b.released_at || ""));
 
   // Default: the printing chosen on the deck page (e.g. Moxfield), preferring
   // its version in the chosen language; else best-looking print in the chosen
@@ -614,12 +641,17 @@ async function buildCardEntry(englishCard, lang, loc, eng, prefPrint) {
     lang, english: englishCard, loc,
     prints, printIndex: Math.max(0, prints.indexOf(best)),
     overlayTexts: null, usedMT: false,
+    rotated: englishCard.layout === "split",
   };
   entry.faces = await buildFaces(entry);
   entry.status = computeStatus(entry);
-  entry.printedName = loc?.fields?.[0]?.name || entry.overlayTexts?.[0]?.name ||
-    langPrints[0]?.printed_name || langPrints[0]?.card_faces?.[0]?.printed_name ||
-    englishCard.name;
+  const faceName = (i) => loc?.fields?.[i]?.name || entry.overlayTexts?.[i]?.name ||
+    langPrints[0]?.card_faces?.[i]?.printed_name || null;
+  if (englishCard.card_faces?.length === 2 && faceName(0) && faceName(1)) {
+    entry.printedName = `${faceName(0)} // ${faceName(1)}`;
+  } else {
+    entry.printedName = faceName(0) || langPrints[0]?.printed_name || englishCard.name;
+  }
   return entry;
 }
 
@@ -657,6 +689,27 @@ async function buildFaces(entry) {
     const { texts, usedMT } = await resolveTranslations(entry.english, entry.lang, entry.loc);
     entry.overlayTexts = texts;
     entry.usedMT = usedMT;
+  }
+
+  // Split cards: rotate the scan 90° clockwise so both halves read
+  // horizontally (displayed landscape; rotated back at PDF time).
+  if (entry.rotated) {
+    const bitmap = await loadImage(urls[0]);
+    const canvas = document.createElement("canvas");
+    canvas.width = bitmap.height;
+    canvas.height = bitmap.width;
+    const ctx = canvas.getContext("2d");
+    ctx.save();
+    ctx.translate(canvas.width, 0);
+    ctx.rotate(Math.PI / 2);
+    ctx.drawImage(bitmap, 0, 0);
+    ctx.restore();
+    bitmap.close?.();
+    if (needsOverlay && entry.overlayTexts) {
+      drawSplitOverlay(ctx, canvas.width, canvas.height, entry.overlayTexts,
+        entry.english.card_faces || []);
+    }
+    return [canvas.toDataURL("image/jpeg", 0.92)];
   }
 
   const faces = [];
@@ -866,20 +919,33 @@ function makeTile(card) {
   });
   tile.appendChild(badgeEl);
 
+  tile.classList.toggle("wide", !!card.rotated);
+
+  const imgWrap = document.createElement("div");
+  imgWrap.className = "img-wrap";
   const img = document.createElement("img");
   img.src = card.faces[0];
   img.alt = card.name;
   img.loading = "lazy";
+  imgWrap.appendChild(img);
   if (card.faces.length > 1) {
     let face = 0;
-    img.style.cursor = "pointer";
-    img.title = "Click to flip";
-    img.addEventListener("click", () => {
+    const flip = () => {
       face = (face + 1) % card.faces.length;
       img.src = card.faces[face];
-    });
+    };
+    img.style.cursor = "pointer";
+    img.title = "Click to flip";
+    img.addEventListener("click", flip);
+    const flipBtn = document.createElement("button");
+    flipBtn.className = "flip-btn";
+    flipBtn.title = "Show the other side";
+    flipBtn.innerHTML =
+      '<svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
+    flipBtn.addEventListener("click", (e) => { e.stopPropagation(); flip(); });
+    imgWrap.appendChild(flipBtn);
   }
-  tile.appendChild(img);
+  tile.appendChild(imgWrap);
 
   if (card.prints.length > 1) {
     const sel = document.createElement("select");
@@ -1074,6 +1140,24 @@ async function addCustomCard(name, qty = 1) {
  * PDF generation: A4, 3 x 3 grid, 62 x 87 mm cards
  * ---------------------------------------------------------- */
 
+// Rotate a landscape face (split card) back to portrait for printing.
+async function rotateToPortrait(dataUrl) {
+  const img = new Image();
+  await new Promise((resolve, reject) => {
+    img.onload = resolve;
+    img.onerror = reject;
+    img.src = dataUrl;
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = img.height;
+  canvas.height = img.width;
+  const ctx = canvas.getContext("2d");
+  ctx.translate(0, canvas.height);
+  ctx.rotate(-Math.PI / 2);
+  ctx.drawImage(img, 0, 0);
+  return canvas.toDataURL("image/jpeg", 0.92);
+}
+
 // Ask whether double-sided cards should print both faces or only the front.
 function askDfcChoice(count) {
   return new Promise((resolve) => {
@@ -1099,11 +1183,20 @@ async function onGeneratePdf() {
     const MARGIN_X = (PAGE_W - COLS * CARD_W) / 2; // 12 mm
     const MARGIN_Y = (PAGE_H - ROWS * CARD_H) / 2; // 18 mm
 
-    // Flatten: each copy of each printed face is one slot
+    // Flatten: each copy of each printed face is one slot. Split cards are
+    // stored landscape for display — rotate them back to portrait here.
     const slots = [];
     for (const card of cards) {
       const faces = includeBacks ? card.faces : card.faces.slice(0, 1);
-      for (let i = 0; i < card.qty; i++) slots.push(...faces);
+      for (let i = 0; i < card.qty; i++) {
+        for (const f of faces) slots.push({ url: f, rotated: !!card.rotated });
+      }
+    }
+    const portraitCache = new Map();
+    for (const s of slots) {
+      if (s.rotated && !portraitCache.has(s.url)) {
+        portraitCache.set(s.url, await rotateToPortrait(s.url));
+      }
     }
 
     const drawCutMarks = () => {
@@ -1122,7 +1215,7 @@ async function onGeneratePdf() {
       }
     };
 
-    slots.forEach((dataUrl, i) => {
+    slots.forEach((slot, i) => {
       const posOnPage = i % (COLS * ROWS);
       if (i > 0 && posOnPage === 0) doc.addPage();
       if (posOnPage === 0) drawCutMarks();
@@ -1130,6 +1223,7 @@ async function onGeneratePdf() {
       const row = Math.floor(posOnPage / COLS);
       const x = MARGIN_X + col * CARD_W;
       const y = MARGIN_Y + row * CARD_H;
+      const dataUrl = slot.rotated ? portraitCache.get(slot.url) : slot.url;
       doc.addImage(dataUrl, "JPEG", x, y, CARD_W, CARD_H);
     });
 
