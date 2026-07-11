@@ -49,7 +49,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // either as HTTP 429 or as a CORS/network failure (Cloudflare error responses
 // carry no CORS headers, so fetch throws), and the block can last several
 // seconds — back off up to ~16 s before giving up.
-async function fetchRetry(url, opts = undefined, tries = 5) {
+async function fetchRetry(url, opts = undefined, tries = 6) {
   let lastError = null;
   for (let i = 0; i < tries; i++) {
     try {
@@ -62,7 +62,7 @@ async function fetchRetry(url, opts = undefined, tries = 5) {
     } catch (e) {
       lastError = e;
     }
-    await sleep(Math.min(16000, 1000 * 2 ** i));
+    await sleep(Math.min(30000, 1000 * 2 ** i));
   }
   throw lastError || new Error("Request failed");
 }
@@ -143,7 +143,11 @@ async function loadMoxfield(url) {
   const addBoard = (board, section) => {
     if (!board) return;
     for (const [name, info] of Object.entries(board)) {
-      entries.push({ name, qty: info.quantity || 1, section });
+      // Remember the exact printing chosen on the Moxfield page
+      const print = info.card?.set
+        ? { set: String(info.card.set).toLowerCase(), cn: String(info.card.cn ?? "") }
+        : null;
+      entries.push({ name, qty: info.quantity || 1, section, print });
     }
   };
   addBoard(data.commanders, "mainboard");
@@ -583,7 +587,7 @@ function bitmapToDataUrl(bitmap) {
 // Others (split, flip, adventure, saga, class…) keep the English scan.
 const OVERLAY_LAYOUTS = new Set(["normal", "transform", "modal_dfc", "meld"]);
 
-async function buildCardEntry(englishCard, lang, loc, eng) {
+async function buildCardEntry(englishCard, lang, loc, eng, prefPrint) {
   const langPrints = lang === "en" ? [] : (loc?.prints || []);
   const engPrints = eng?.prints?.length ? eng.prints : [englishCard];
 
@@ -592,9 +596,19 @@ async function buildCardEntry(englishCard, lang, loc, eng) {
   const prints = [...langPrints, ...engPrints]
     .sort((a, b) => (b.released_at || "").localeCompare(a.released_at || ""));
 
-  // Default: best-looking print in the chosen language, else best English
-  const pool = langPrints.length ? langPrints : engPrints;
-  const best = pool.slice().sort((a, b) => printScore(a) - printScore(b))[0];
+  // Default: the printing chosen on the deck page (e.g. Moxfield), preferring
+  // its version in the chosen language; else best-looking print in the chosen
+  // language, else best English.
+  let best = null;
+  if (prefPrint) {
+    const match = (p, l) =>
+      p.set === prefPrint.set && p.collector_number === prefPrint.cn && p.lang === l;
+    best = prints.find((p) => match(p, lang)) || prints.find((p) => match(p, "en"));
+  }
+  if (!best) {
+    const pool = langPrints.length ? langPrints : engPrints;
+    best = pool.slice().sort((a, b) => printScore(a) - printScore(b))[0];
+  }
 
   const entry = {
     lang, english: englishCard, loc,
@@ -609,15 +623,22 @@ async function buildCardEntry(englishCard, lang, loc, eng) {
   return entry;
 }
 
-function printNeedsOverlay(entry) {
+// Whether the selected print could take a translation overlay (regardless
+// of the user's "keep English" choice).
+function printTranslatable(entry) {
   const print = entry.prints[entry.printIndex];
   return entry.lang !== "en" && print.lang !== entry.lang &&
     OVERLAY_LAYOUTS.has(entry.english.layout);
 }
 
+function printNeedsOverlay(entry) {
+  return printTranslatable(entry) && !entry.forceEnglish;
+}
+
 function computeStatus(entry) {
   const print = entry.prints[entry.printIndex];
   if (entry.lang === "en" || print.lang === entry.lang) return "localized";
+  if (entry.forceEnglish) return "english";
   if (entry.overlayTexts) return entry.usedMT ? "mt" : "overlay";
   return "english";
 }
@@ -694,7 +715,8 @@ async function loadEntries(entries, lang) {
     if (!englishCard) { failed.push(entry); continue; }
     try {
       const built = await buildCardEntry(englishCard, lang,
-        localizedMap.get(englishCard.oracle_id), englishMap.get(englishCard.oracle_id));
+        localizedMap.get(englishCard.oracle_id), englishMap.get(englishCard.oracle_id),
+        entry.print);
       cards.push({ name: entry.name, qty: entry.qty, section: entry.section, ...built });
     } catch (e) {
       console.error(`Failed to build ${entry.name}:`, e);
@@ -806,15 +828,42 @@ function renderGrid() {
   $("deck-section").classList.toggle("hidden", cards.length === 0);
 }
 
+function updateBadge(badgeEl, card) {
+  const badge = BADGES[card.status];
+  badgeEl.className = `badge ${badge.cls}`;
+  badgeEl.textContent = badge.label;
+  badgeEl.title = badge.title;
+  if (printTranslatable(card)) {
+    badgeEl.classList.add("badge-click");
+    badgeEl.title = card.forceEnglish
+      ? "English text kept — click to translate"
+      : `${badge.title} — click to keep the English text instead`;
+  }
+}
+
 function makeTile(card) {
   const tile = document.createElement("div");
   tile.className = "card-tile";
 
-  const badge = BADGES[card.status];
   const badgeEl = document.createElement("span");
-  badgeEl.className = `badge ${badge.cls}`;
-  badgeEl.textContent = badge.label;
-  badgeEl.title = badge.title;
+  updateBadge(badgeEl, card);
+  badgeEl.addEventListener("click", async () => {
+    if (!printTranslatable(card) || badgeEl.dataset.busy) return;
+    badgeEl.dataset.busy = "1";
+    card.forceEnglish = !card.forceEnglish;
+    img.style.opacity = "0.4";
+    try {
+      card.faces = await buildFaces(card);
+      img.src = card.faces[0];
+      card.status = computeStatus(card);
+      updateBadge(badgeEl, card);
+    } catch (e) {
+      console.error(e);
+      setStatus(`Could not update ${card.name}: ${e.message}`, null, true);
+    }
+    img.style.opacity = "";
+    delete badgeEl.dataset.busy;
+  });
   tile.appendChild(badgeEl);
 
   const img = document.createElement("img");
@@ -853,10 +902,7 @@ function makeTile(card) {
         card.faces = await buildFaces(card);
         img.src = card.faces[0];
         card.status = computeStatus(card);
-        const badge = BADGES[card.status];
-        badgeEl.className = `badge ${badge.cls}`;
-        badgeEl.textContent = badge.label;
-        badgeEl.title = badge.title;
+        updateBadge(badgeEl, card);
       } catch (e) {
         console.error(e);
         setStatus(`Could not load that printing of ${card.name}: ${e.message}`, null, true);
