@@ -1247,16 +1247,17 @@ async function loadEntries(entries, lang, sortByType = false) {
   return failed;
 }
 
-// Tokens (and emblems) that the loaded cards can create, as loadEntries
-// entries. Scryfall lists them in each card's `all_parts`: tokens have
-// component "token"; emblems are "combo_piece" with an Emblem type line
-// (the card itself is also listed and must be skipped). Different cards
-// reference different printings of the same token, so dedupe by oracle_id.
-async function collectTokenEntries() {
+// Tokens (and emblems) that the given English cards can create, as
+// loadEntries entries. Scryfall lists them in each card's `all_parts`:
+// tokens have component "token"; emblems are "combo_piece" with an Emblem
+// type line (the card itself is also listed and must be skipped). Different
+// cards reference different printings of the same token, so dedupe by
+// oracle_id — including against tokens already in the grid.
+async function collectTokenEntries(englishCards) {
   const partIds = new Set();
-  for (const card of cards) {
-    for (const part of card.english?.all_parts || []) {
-      if (part.id === card.english.id) continue;
+  for (const card of englishCards) {
+    for (const part of card?.all_parts || []) {
+      if (part.id === card.id) continue;
       if (part.component === "token" || (part.type_line || "").startsWith("Emblem")) {
         partIds.add(part.id);
       }
@@ -1279,9 +1280,10 @@ async function collectTokenEntries() {
     await sleep(100);
   }
 
+  const already = new Set(cards.map((c) => c.english.oracle_id));
   const byOracle = new Map();
   for (const t of tokens) {
-    if (!byOracle.has(t.oracle_id)) byOracle.set(t.oracle_id, t);
+    if (!already.has(t.oracle_id) && !byOracle.has(t.oracle_id)) byOracle.set(t.oracle_id, t);
   }
   return [...byOracle.values()]
     .sort((a, b) => a.name.localeCompare(b.name) || typeRank(a) - typeRank(b))
@@ -1336,7 +1338,7 @@ async function onLoadCards() {
     failedEntries = await loadEntries(entries, currentLang, !!deck.sortByType);
 
     if ($("include-tokens").value === "yes") {
-      const tokenEntries = await collectTokenEntries();
+      const tokenEntries = await collectTokenEntries(cards.map((c) => c.english));
       if (tokenEntries.length) {
         failedEntries.push(...await loadEntries(tokenEntries, currentLang));
       }
@@ -1648,6 +1650,14 @@ async function addCustomCard(name, qty = 1) {
   const eng = (await findLocalizedBatch([englishCard.oracle_id], "en")).get(englishCard.oracle_id);
   const built = await buildCardEntry(englishCard, lang, loc, eng);
   cards.push({ name: englishCard.name, qty, section: "mainboard", ...built });
+
+  // If tokens are included, also add the tokens/emblems this card creates
+  // (skipping any already in the grid).
+  if ($("include-tokens").value === "yes") {
+    const tokenEntries = await collectTokenEntries([englishCard]);
+    if (tokenEntries.length) await loadEntries(tokenEntries, lang);
+  }
+
   hideStatus();
   renderGrid();
 }
