@@ -474,26 +474,93 @@ async function loadImage(url) {
   return await createImageBitmap(blob);
 }
 
-function wrapText(ctx, text, maxWidth) {
-  const lines = [];
-  for (const paragraph of text.split("\n")) {
-    if (!paragraph.trim()) { lines.push(""); continue; }
-    let current = "";
-    // CJK languages have no spaces: wrap per character if no spaces found.
-    const words = paragraph.includes(" ") ? paragraph.split(" ") : paragraph.split("");
-    const joiner = paragraph.includes(" ") ? " " : "";
-    for (const word of words) {
-      const test = current ? current + joiner + word : word;
-      if (ctx.measureText(test).width > maxWidth && current) {
-        lines.push(current);
-        current = word;
-      } else {
-        current = test;
+
+/* ------------------------------------------------------------
+ * Mana / game symbols: "{T}", "{2}{G}", "{W/U}"… are rendered with
+ * Scryfall's official symbol SVGs, rasterized once and cached.
+ * ---------------------------------------------------------- */
+
+const symbolCache = new Map();
+
+function symbolKey(code) {
+  return code.toUpperCase().replace(/\//g, "");
+}
+
+async function loadSymbolImage(code) {
+  const key = symbolKey(code);
+  if (symbolCache.has(key)) return;
+  let result = null;
+  try {
+    const resp = await fetchRetry(
+      `https://svgs.scryfall.io/card-symbols/${encodeURIComponent(key)}.svg`, undefined, 2);
+    if (resp.ok) {
+      const url = URL.createObjectURL(await resp.blob());
+      try {
+        const img = await new Promise((resolve, reject) => {
+          const i = new Image();
+          i.onload = () => resolve(i);
+          i.onerror = reject;
+          i.src = url;
+        });
+        const c = document.createElement("canvas");
+        c.width = c.height = 64;
+        c.getContext("2d").drawImage(img, 0, 0, 64, 64);
+        result = c;
+      } finally {
+        URL.revokeObjectURL(url);
       }
     }
-    if (current) lines.push(current);
+  } catch { /* unknown symbol: keep the {X} text form */ }
+  symbolCache.set(key, result);
+}
+
+function symbolFor(code) {
+  return symbolCache.get(symbolKey(code)) || null;
+}
+
+async function preloadSymbols(texts) {
+  const codes = new Set();
+  for (const t of texts || []) {
+    for (const m of (t?.text || "").matchAll(/\{([^}]+)\}/g)) codes.add(m[1]);
   }
-  return lines;
+  await Promise.all([...codes].map(loadSymbolImage));
+}
+
+// Split a paragraph into wrappable atoms of {text}/{sym} segments.
+// `glue` means "no space before this atom" (used for CJK, split per char).
+function atomize(paragraph) {
+  const segs = [];
+  let last = 0;
+  for (const m of paragraph.matchAll(/\{([^}]+)\}/g)) {
+    if (m.index > last) segs.push({ text: paragraph.slice(last, m.index) });
+    segs.push({ sym: m[1] });
+    last = m.index + m[0].length;
+  }
+  if (last < paragraph.length) segs.push({ text: paragraph.slice(last) });
+
+  const hasSpaces = paragraph.includes(" ");
+  const atoms = [];
+  let current = { segs: [], glue: false };
+  const flush = (glueNext) => {
+    if (current.segs.length) atoms.push(current);
+    current = { segs: [], glue: !!glueNext };
+  };
+  for (const seg of segs) {
+    if (seg.sym) { current.segs.push(seg); continue; }
+    if (hasSpaces) {
+      seg.text.split(" ").forEach((word, i) => {
+        if (i > 0) flush(false);
+        if (word) current.segs.push({ text: word });
+      });
+    } else {
+      for (const ch of seg.text) {
+        flush(true);
+        current.segs.push({ text: ch });
+      }
+    }
+  }
+  flush();
+  return atoms;
 }
 
 function paintParchment(ctx, W, x0, y0, x1, y1) {
@@ -522,26 +589,79 @@ function paintBarText(ctx, W, text, x0, y0, x1, y1, style) {
   ctx.fillText(text, x0 + pad, (y0 + y1) / 2, maxW);
 }
 
-// Wrapped rules text, shrunk to fit its box
+// Wrapped rules text, shrunk to fit its box, with {X} tokens drawn as
+// game symbols (call preloadSymbols() on the text beforehand).
 function paintTextBox(ctx, W, baseFontSize, text, x0, y0, x1, y1) {
   const pad = 0.018 * W;
   paintParchment(ctx, W, x0, y0, x1, y1);
   const boxW = x1 - x0 - 2 * pad;
   const boxH = y1 - y0 - 2 * pad;
 
+  const atomWidth = (segs, symW) => {
+    let w = 0;
+    for (const s of segs) {
+      w += s.sym
+        ? (symbolFor(s.sym) ? symW : ctx.measureText(`{${s.sym}}`).width)
+        : ctx.measureText(s.text).width;
+    }
+    return w;
+  };
+
+  // Wrap into lines of atoms, shrinking the font until the text fits
   let fontSize = baseFontSize;
   let lines;
   for (;;) {
     ctx.font = `${fontSize}px Georgia, "Times New Roman", serif`;
-    lines = wrapText(ctx, text, boxW);
+    const symW = fontSize * 1.02;
+    const spaceW = ctx.measureText(" ").width;
+    lines = [];
+    for (const paragraph of text.split("\n")) {
+      if (!paragraph.trim()) { lines.push([]); continue; }
+      let line = [], lineW = 0;
+      for (const atom of atomize(paragraph)) {
+        const aw = atomWidth(atom.segs, symW);
+        const gap = line.length && !atom.glue ? spaceW : 0;
+        if (line.length && lineW + gap + aw > boxW) {
+          lines.push(line);
+          line = [{ ...atom, glue: true }];
+          lineW = aw;
+        } else {
+          line.push(atom);
+          lineW += gap + aw;
+        }
+      }
+      lines.push(line);
+    }
     if (lines.length * fontSize * 1.25 <= boxH || fontSize < baseFontSize * 0.35) break;
     fontSize *= 0.93;
   }
+
   ctx.fillStyle = "#141210";
   ctx.textBaseline = "top";
+  const symW = fontSize * 1.02;
+  const spaceW = ctx.measureText(" ").width;
   let y = y0 + pad;
   for (const line of lines) {
-    ctx.fillText(line, x0 + pad, y, boxW);
+    let x = x0 + pad;
+    line.forEach((atom, i) => {
+      if (i > 0 && !atom.glue) x += spaceW;
+      for (const seg of atom.segs) {
+        if (seg.sym) {
+          const img = symbolFor(seg.sym);
+          if (img) {
+            ctx.drawImage(img, x, y + fontSize * 0.06, symW, symW);
+            x += symW;
+          } else {
+            const t = `{${seg.sym}}`;
+            ctx.fillText(t, x, y);
+            x += ctx.measureText(t).width;
+          }
+        } else {
+          ctx.fillText(seg.text, x, y);
+          x += ctx.measureText(seg.text).width;
+        }
+      }
+    });
     y += fontSize * 1.25;
   }
 }
@@ -698,6 +818,7 @@ async function buildFaces(entry) {
     entry.overlayTexts = texts;
     entry.usedMT = usedMT;
   }
+  if (needsOverlay) await preloadSymbols(entry.overlayTexts);
 
   // Split cards: rotate the scan 90° clockwise so both halves read
   // horizontally (displayed landscape; rotated back at PDF time).
