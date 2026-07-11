@@ -150,13 +150,13 @@ async function loadMoxfield(url) {
       entries.push({ name, qty: info.quantity || 1, section, print });
     }
   };
-  addBoard(data.commanders, "mainboard");
-  addBoard(data.companions, "mainboard");
+  addBoard(data.commanders, "commander");
+  addBoard(data.companions, "commander");
   addBoard(data.mainboard, "mainboard");
   addBoard(data.sideboard, "sideboard");
   addBoard(data.maybeboard, "maybeboard"); // "Considering" in the Moxfield UI
   if (entries.length === 0) throw new Error("Moxfield deck appears to be empty");
-  return { title: data.name || "Moxfield deck", entries };
+  return { title: data.name || "Moxfield deck", entries, sortByType: true };
 }
 
 async function loadMtgTop8(url) {
@@ -166,6 +166,7 @@ async function loadMtgTop8(url) {
   const parsed = parseDeckText(text);
   if (parsed.entries.length === 0) throw new Error("MTGTop8 deck appears to be empty");
   parsed.title = "MTGTop8 deck";
+  parsed.sortByType = true;
   return parsed;
 }
 
@@ -614,7 +615,7 @@ function bitmapToDataUrl(bitmap) {
 // Others (flip, adventure, saga, class…) keep the English scan.
 const OVERLAY_LAYOUTS = new Set(["normal", "transform", "modal_dfc", "meld", "split"]);
 
-async function buildCardEntry(englishCard, lang, loc, eng, prefPrint) {
+async function buildCardEntry(englishCard, lang, loc, eng, prefPrint, versionMode = "language") {
   const langPrints = lang === "en" ? [] : (loc?.prints || []);
   const engPrints = eng?.prints?.length ? eng.prints : [englishCard];
 
@@ -623,18 +624,25 @@ async function buildCardEntry(englishCard, lang, loc, eng, prefPrint) {
   const prints = [...langPrints, ...engPrints]
     .sort((a, b) => (a.released_at || "").localeCompare(b.released_at || ""));
 
-  // Default: the printing chosen on the deck page (e.g. Moxfield), preferring
-  // its version in the chosen language; else best-looking print in the chosen
-  // language, else best English.
+  // Default print selection. With a deck-page printing (Moxfield):
+  // - "language" mode: that printing in the chosen language, else any print
+  //   in the chosen language, else that printing in English (overlay).
+  // - "moxfield" mode: that printing in the chosen language (same artwork),
+  //   else that printing in English (overlay).
+  // Without a preferred printing: best print in the language, else English.
+  const bestOf = (pool) => pool.slice().sort((a, b) => printScore(a) - printScore(b))[0];
   let best = null;
   if (prefPrint) {
     const match = (p, l) =>
       p.set === prefPrint.set && p.collector_number === prefPrint.cn && p.lang === l;
-    best = prints.find((p) => match(p, lang)) || prints.find((p) => match(p, "en"));
+    best = prints.find((p) => match(p, lang));
+    if (!best && versionMode === "language" && langPrints.length) {
+      best = bestOf(langPrints);
+    }
+    if (!best) best = prints.find((p) => match(p, "en"));
   }
   if (!best) {
-    const pool = langPrints.length ? langPrints : engPrints;
-    best = pool.slice().sort((a, b) => printScore(a) - printScore(b))[0];
+    best = bestOf(langPrints.length ? langPrints : engPrints);
   }
 
   const entry = {
@@ -734,12 +742,36 @@ async function buildFaces(entry) {
 let failedEntries = []; // entries that failed in the last load, for the retry button
 let currentLang = "en";
 
+// Deck-page display order: commanders first, then type groups as shown on
+// Moxfield, alphabetical within each group.
+const SECTION_RANK = { commander: 0, mainboard: 1, sideboard: 2, maybeboard: 3 };
+
+function typeRank(card) {
+  const tl = (card?.type_line || "").split("//")[0].toLowerCase();
+  if (tl.includes("creature")) return 0;
+  if (tl.includes("land")) return 7;
+  if (tl.includes("planeswalker")) return 1;
+  if (tl.includes("instant")) return 2;
+  if (tl.includes("sorcery")) return 3;
+  if (tl.includes("artifact")) return 4;
+  if (tl.includes("enchantment")) return 5;
+  if (tl.includes("battle")) return 6;
+  return 8;
+}
+
 // Resolve and build the given entries, appending successes to `cards`.
 // Returns the entries that could not be loaded.
-async function loadEntries(entries, lang) {
+async function loadEntries(entries, lang, sortByType = false) {
   setStatus(`Resolving ${entries.length} cards on Scryfall…`, 0.02);
   const uniqueNames = [...new Set(entries.map((e) => e.name))];
   const { found } = await resolveCards(uniqueNames);
+
+  if (sortByType) {
+    entries = entries.slice().sort((a, b) =>
+      ((SECTION_RANK[a.section] ?? 1) - (SECTION_RANK[b.section] ?? 1)) ||
+      (typeRank(found.get(a.name.toLowerCase())) - typeRank(found.get(b.name.toLowerCase()))) ||
+      a.name.localeCompare(b.name));
+  }
 
   const oracleIds = [...new Set(
     entries.map((e) => found.get(e.name.toLowerCase())?.oracle_id).filter(Boolean)
@@ -757,6 +789,7 @@ async function loadEntries(entries, lang) {
   setStatus("Looking up printings…", 0.09);
   const englishMap = await findLocalizedBatch(oracleIds, "en");
 
+  const versionMode = $("preferred-version").value || "language";
   const total = entries.length;
   let done = 0;
   const failed = [];
@@ -769,7 +802,7 @@ async function loadEntries(entries, lang) {
     try {
       const built = await buildCardEntry(englishCard, lang,
         localizedMap.get(englishCard.oracle_id), englishMap.get(englishCard.oracle_id),
-        entry.print);
+        entry.print, versionMode);
       cards.push({ name: entry.name, qty: entry.qty, section: entry.section, ...built });
     } catch (e) {
       console.error(`Failed to build ${entry.name}:`, e);
@@ -825,7 +858,7 @@ async function onLoadCards() {
     entries = [...merged.values()];
 
     currentLang = $("language").value;
-    failedEntries = await loadEntries(entries, currentLang);
+    failedEntries = await loadEntries(entries, currentLang, !!deck.sortByType);
     reportLoadResult();
   } catch (e) {
     console.error(e);
@@ -1248,7 +1281,10 @@ $("generate-btn").addEventListener("click", onGeneratePdf);
 $("deck-url").addEventListener("keydown", (e) => {
   if (e.key === "Enter") onLoadCards();
 });
-// The "Considering" board only exists on Moxfield
+// The "Considering" board and version preference only exist on Moxfield
 $("deck-url").addEventListener("input", () => {
-  $("maybeboard-wrap").classList.toggle("hidden", !/moxfield\.com/i.test($("deck-url").value));
+  const isMoxfield = /moxfield\.com/i.test($("deck-url").value);
+  for (const el of document.querySelectorAll(".moxfield-only")) {
+    el.classList.toggle("hidden", !isMoxfield);
+  }
 });
