@@ -1,13 +1,16 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>MtG Proxy Printer</title>
   <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🃏</text></svg>">
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🃏</text></svg>">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
+
 <body>
   <header>
     <h1>🃏 MtG Proxy Printer</h1>
@@ -23,7 +26,8 @@
 
       <details id="paste-fallback">
         <summary>…or paste a decklist manually</summary>
-        <textarea id="deck-text" rows="8" placeholder="4 Lightning Bolt&#10;2 Counterspell&#10;&#10;Sideboard&#10;2 Duress"></textarea>
+        <textarea id="deck-text" rows="8"
+          placeholder="4 Lightning Bolt&#10;2 Counterspell&#10;&#10;Sideboard&#10;2 Duress"></textarea>
       </details>
 
       <div class="control-row inline">
@@ -44,9 +48,9 @@
           </select>
         </div>
         <div>
-          <label for="translator">Translator <span class="hint">(for MT cards)</span></label>
+          <label for="translator">Translator</label>
           <select id="translator">
-            <option value="ai" selected>AI (MtG-aware) [speed ★☆☆ / quality ★★★]</option>
+            <option value="ai" selected>MtG-aware AI [speed ★☆☆ / quality ★★★]</option>
             <option value="google">Google Translate [speed ★★★ / quality ★★☆]</option>
             <option value="bing">Microsoft Translator [speed ★★★ / quality ★☆☆]</option>
             <option value="mymemory">MyMemory [speed ★★☆ / quality ★☆☆]</option>
@@ -76,7 +80,7 @@
           </select>
         </div>
         <div>
-          <label for="include-tokens">Tokens <span class="hint">(created by deck cards)</span></label>
+          <label for="include-tokens">Tokens</label>
           <select id="include-tokens">
             <option value="no">Exclude</option>
             <option value="yes">Include</option>
@@ -89,7 +93,9 @@
 
       <div id="status" class="status hidden">
         <div class="status-text" id="status-text"></div>
-        <div class="progress-track"><div class="progress-bar" id="progress-bar"></div></div>
+        <div class="progress-track">
+          <div class="progress-bar" id="progress-bar"></div>
+        </div>
         <button id="retry-btn" class="primary hidden">Retry failed cards</button>
       </div>
     </section>
@@ -109,19 +115,22 @@
       <h3>Legend</h3>
       <ul>
         <li><span class="badge badge-localized">✓</span> Card found in the chosen language.</li>
-        <li><span class="badge badge-overlay">T</span> No usable scan in the chosen language — English card shown with its name, type line and text box replaced by the official translated text (Scryfall / Gatherer printed-card data).</li>
-        <li><span class="badge badge-mt">MT</span> No official translation exists — name, type line and text machine-translated (translator of your choice).</li>
+        <li><span class="badge badge-overlay">T</span> No usable scan in the chosen language — English card shown with
+          its name, type line and text box replaced by the official translated text (Scryfall / Gatherer printed-card
+          data).</li>
+        <li><span class="badge badge-mt">MT</span> No official translation exists — name, type line and text
+          machine-translated (translator of your choice).</li>
         <li><span class="badge badge-english">EN</span> Kept in English.</li>
       </ul>
       <p class="legend-note">Click a <strong>T</strong>/<strong>MT</strong> badge to keep the English text instead
-      (click again to restore the translation).</p>
+        (click again to restore the translation).</p>
     </section>
   </main>
 
   <dialog id="dfc-dialog">
     <h3>Double-sided cards</h3>
     <p>This deck contains <span id="dfc-count"></span> double-sided card(s).<br>
-    Do you want to print their backs as well, or only the fronts?</p>
+      Do you want to print their backs as well, or only the fronts?</p>
     <form method="dialog" class="dialog-buttons">
       <button value="both" class="primary">Front + back</button>
       <button value="front" class="primary secondary">Front only</button>
@@ -130,10 +139,11 @@
 
   <footer>
     <p>Card data and images courtesy of <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.
-    Unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards.
-    Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.</p>
+      Unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards.
+      Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.</p>
   </footer>
 
   <script src="app.js"></script>
 </body>
+
 </html>
