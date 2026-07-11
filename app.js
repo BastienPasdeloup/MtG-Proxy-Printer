@@ -297,14 +297,39 @@ async function findLocalizedBatch(oracleIds, lang) {
       const pFaces = p.card_faces?.length ? p.card_faces : [p];
       pFaces.forEach((f, i) => {
         fields[i] = fields[i] || {};
-        fields[i].name = fields[i].name || f.printed_name || (i === 0 ? p.printed_name : null);
-        fields[i].type = fields[i].type || f.printed_type_line || (i === 0 ? p.printed_type_line : null);
-        fields[i].text = fields[i].text || f.printed_text || (i === 0 ? p.printed_text : null);
+        const s = sanitizePrintedFields({
+          name: f.printed_name || (i === 0 ? p.printed_name : null),
+          type: f.printed_type_line || (i === 0 ? p.printed_type_line : null),
+          text: f.printed_text || (i === 0 ? p.printed_text : null),
+          artist: f.artist || p.artist,
+        });
+        fields[i].name = fields[i].name || s.name;
+        fields[i].type = fields[i].type || s.type;
+        fields[i].text = fields[i].text || s.text;
       });
     }
     result.set(oracleId, { prints: usable, fields });
   }
   return result;
+}
+
+// Scryfall's printed_* fields are sometimes mis-segmented OCR (notably on
+// split-card faces): the artist credit leaks into the rules text, and the
+// "type line" contains the first rules sentence. Repair what we can.
+function sanitizePrintedFields({ name, type, text, artist }) {
+  const artists = (artist || "").split(/\s*&\s*/).map((a) => a.trim()).filter(Boolean);
+  if (text && artists.length) {
+    text = text.split("\n")
+      .filter((line) => !artists.includes(line.trim()))
+      .join("\n").trim() || null;
+  }
+  // A real type line never ends with sentence punctuation — this is a rules
+  // sentence that slipped into the wrong field: move it back to the text.
+  if (type && /[.!?…]\s*$/.test(type)) {
+    text = text ? `${type.trim()}\n${text}` : type.trim();
+    type = null;
+  }
+  return { name, type, text };
 }
 
 /* ------------------------------------------------------------
@@ -677,8 +702,8 @@ function drawWithOverlay(bitmap, tr, manaSymbols) {
   ctx.drawImage(bitmap, 0, 0);
 
   if (tr.name) {
-    // Leave the mana cost (right side of the title bar) visible
-    const x1 = (0.93 - manaSymbols * 0.048) * W;
+    // Leave the mana cost (right side of the title bar) fully visible
+    const x1 = (manaSymbols > 0 ? 0.925 - manaSymbols * 0.052 - 0.012 : 0.93) * W;
     paintBarText(ctx, W, tr.name, 0.068 * W, 0.048 * H, x1, 0.100 * H, "bold ");
   }
   if (tr.type) {
@@ -704,17 +729,20 @@ function drawSplitOverlay(ctx, W, H, texts, engFaces) {
     if (!tr) continue;
     const h = HALVES[i];
     const mana = (engFaces[i]?.mana_cost || "").match(/{[^}]+}/g)?.length || 0;
-    if (tr.name) {
-      const x1 = (h.x1 - mana * 0.049 - 0.008) * W;
-      paintBarText(ctx, W, tr.name, (h.x0 + 0.004) * W, 0.062 * H, x1, 0.148 * H, "bold ");
+    // Text box first: the type bar is painted on top of its upper edge so
+    // both old (2003) and modern (2015) split frames are fully covered.
+    if (tr.text) {
+      paintTextBox(ctx, W, 0.036 * H, tr.text,
+        (h.x0 + 0.004) * W, 0.632 * H, (h.x1 - 0.005) * W, 0.950 * H);
     }
     if (tr.type) {
       // Leave the set symbol (right end of the type bar) visible
-      paintBarText(ctx, W, tr.type, (h.x0 + 0.004) * W, 0.553 * H, (h.x1 - 0.058) * W, 0.642 * H, "bold ");
+      paintBarText(ctx, W, tr.type, (h.x0 + 0.004) * W, 0.548 * H, (h.x1 - 0.058) * W, 0.640 * H, "bold ");
     }
-    if (tr.text) {
-      paintTextBox(ctx, W, 0.036 * H, tr.text,
-        (h.x0 + 0.004) * W, 0.640 * H, (h.x1 - 0.005) * W, 0.955 * H);
+    if (tr.name) {
+      // Leave the mana cost fully visible
+      const x1 = (mana > 0 ? h.x1 - mana * 0.054 - 0.012 : h.x1 - 0.005) * W;
+      paintBarText(ctx, W, tr.name, (h.x0 + 0.004) * W, 0.060 * H, x1, 0.140 * H, "bold ");
     }
   }
 }
