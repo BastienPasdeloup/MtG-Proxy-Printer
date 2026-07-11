@@ -427,10 +427,48 @@ async function myMemoryTranslateImpl(text, lang) {
   return out.join("\n");
 }
 
+const DEEPL_LANG = {
+  fr: "FR", de: "DE", it: "IT", es: "ES", pt: "PT-BR", ja: "JA", ko: "KO",
+  ru: "RU", zhs: "ZH-HANS", zht: "ZH-HANT",
+};
+
+// DeepL needs a (free) API key and does not allow browser CORS,
+// so the request goes through a CORS proxy when the direct call fails.
+async function deeplTranslateImpl(text, lang) {
+  const key = $("deepl-key").value.trim();
+  if (!key) throw new Error("DeepL API key missing — get a free one at deepl.com/pro-api");
+  const host = key.endsWith(":fx") ? "api-free.deepl.com" : "api.deepl.com";
+  const target = `https://${host}/v2/translate`;
+  const body = new URLSearchParams({
+    auth_key: key, text, source_lang: "EN", target_lang: DEEPL_LANG[lang],
+  }).toString();
+
+  const attempts = [target, `https://corsproxy.io/?url=${encodeURIComponent(target)}`];
+  let lastError = null;
+  for (const url of attempts) {
+    try {
+      const resp = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body,
+      });
+      if (!resp.ok) { lastError = new Error(`DeepL error (HTTP ${resp.status})`); continue; }
+      const data = await resp.json();
+      const out = data?.translations?.[0]?.text;
+      if (out) return out;
+      lastError = new Error("DeepL: empty result");
+    } catch (e) {
+      lastError = e;
+    }
+  }
+  throw lastError || new Error("DeepL failed");
+}
+
 const MT_PROVIDERS = {
   google: { label: "Google Translate", fn: googleTranslateImpl },
   bing: { label: "Microsoft Translator", fn: bingTranslateImpl },
   mymemory: { label: "MyMemory", fn: myMemoryTranslateImpl },
+  deepl: { label: "DeepL", fn: deeplTranslateImpl },
 };
 
 async function mtgioLookup(faceName, lang) {
@@ -1523,6 +1561,15 @@ $("generate-btn").addEventListener("click", onGeneratePdf);
 $("deck-url").addEventListener("keydown", (e) => {
   if (e.key === "Enter") onLoadCards();
 });
+// DeepL needs an API key: show the field only when selected, remember the key
+$("translator").addEventListener("change", () => {
+  $("deepl-key-wrap").classList.toggle("hidden", $("translator").value !== "deepl");
+});
+$("deepl-key").value = localStorage.getItem("deeplKey") || "";
+$("deepl-key").addEventListener("input", () => {
+  localStorage.setItem("deeplKey", $("deepl-key").value.trim());
+});
+
 // The "Considering" board and version preference only exist on Moxfield
 $("deck-url").addEventListener("input", () => {
   const isMoxfield = /moxfield\.com/i.test($("deck-url").value);

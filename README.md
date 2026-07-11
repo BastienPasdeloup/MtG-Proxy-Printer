@@ -31,7 +31,7 @@ Every card ends up in the chosen language:
   translation, resolved in this order:
   1. official printed text from Scryfall's localized print data (blue **T** badge),
   2. official Gatherer translations via api.magicthegathering.io (blue **T** badge),
-  3. machine translation — Google Translate, Microsoft Translator or MyMemory, selectable in the UI —
+  3. machine translation — Google Translate, Microsoft Translator, MyMemory or DeepL (own API key), selectable in the UI —
      with official type-word vocabulary (orange **MT** badge).
 - Cards with non-standard frames (split, adventure, sagas…) keep the English scan when no localized
   print exists (gray **EN** badge) — the overlay geometry would not match.

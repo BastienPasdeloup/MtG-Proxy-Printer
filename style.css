@@ -299,3 +299,5 @@ footer {
 footer a { color: var(--accent); }
 
 .legend-note { color: var(--muted); font-size: 0.85rem; margin: 0.6rem 0 0; }
+
+#deepl-key { width: 12rem; background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; color: var(--text); padding: 0.55rem 0.8rem; font-size: 0.85rem; }
