@@ -822,15 +822,15 @@ function drawSplitOverlay(ctx, W, H, texts, engFaces) {
     if (!tr) continue;
     const h = HALVES[i];
     const mana = (engFaces[i]?.mana_cost || "").match(/{[^}]+}/g)?.length || 0;
-    // Text box first: the type bar is painted on top of its upper edge so
-    // both old (2003) and modern (2015) split frames are fully covered.
+    // Text box first: it also covers any type-line text that sits lower on
+    // some split frames; the type bar is then painted at its true position.
     if (tr.text) {
       paintTextBox(ctx, W, 0.036 * H, tr.text,
-        (h.x0 + 0.004) * W, 0.632 * H, (h.x1 - 0.005) * W, 0.950 * H);
+        (h.x0 + 0.004) * W, 0.605 * H, (h.x1 - 0.005) * W, 0.950 * H);
     }
     if (tr.type) {
       // Leave the set symbol (right end of the type bar) visible
-      paintBarText(ctx, W, tr.type, (h.x0 + 0.004) * W, 0.548 * H, (h.x1 - 0.058) * W, 0.640 * H, "bold ");
+      paintBarText(ctx, W, tr.type, (h.x0 + 0.004) * W, 0.540 * H, (h.x1 - 0.058) * W, 0.600 * H, "bold ");
     }
     if (tr.name) {
       // Leave the mana cost fully visible
@@ -1134,7 +1134,7 @@ const BADGES = {
   localized: { cls: "badge-localized", label: "✓", title: "Found in the chosen language" },
   overlay: { cls: "badge-overlay", label: "T", title: "English scan with official translated text" },
   mt: { cls: "badge-mt", label: "MT", title: "No official translation found — machine-translated with the selected translator" },
-  english: { cls: "badge-english", label: "EN", title: "Kept in English (unusual card frame)" },
+  english: { cls: "badge-english", label: "EN", title: "Kept in English" },
 };
 
 function renderGrid() {

@@ -137,6 +137,7 @@ button.primary.big { padding: 0.8rem 2.2rem; font-size: 1.1rem; }
 }
 
 .card-tile.wide { grid-column: span 2; }
+.card-tile.wide img { width: 89%; margin: 0 auto; }
 
 .img-wrap { position: relative; }
 .flip-btn {
