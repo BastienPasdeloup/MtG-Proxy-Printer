@@ -193,7 +193,7 @@ button.primary.big { padding: 0.8rem 2.2rem; font-size: 1.1rem; }
 
 .badge {
   position: absolute;
-  top: 0.7rem;
+  top: 2.6rem; /* below the title bar, so the casting cost stays visible */
   right: 0.7rem;
   z-index: 2;
   font-size: 0.7rem;

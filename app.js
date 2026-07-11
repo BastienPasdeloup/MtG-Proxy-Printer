@@ -849,12 +849,19 @@ function drawWithOverlay(bitmap, tr, manaSymbols) {
 }
 
 // Split cards, drawn on the rotated (landscape) scan: each half is a small
-// card frame. Region fractions calibrated on Scryfall "large" split scans.
-function drawSplitOverlay(ctx, W, H, texts, engFaces) {
+// card frame. Region fractions calibrated on Scryfall "large" split scans;
+// the pre-2003 frame has its type band and text box noticeably higher.
+const SPLIT_GEOM = {
+  old: { typeY: [0.487, 0.548], textY: [0.553, 0.945] },      // 1993/1997 frames
+  modern: { typeY: [0.540, 0.600], textY: [0.605, 0.950] },   // 2003/2015 frames
+};
+
+function drawSplitOverlay(ctx, W, H, texts, engFaces, frame) {
   const HALVES = [
-    { x0: 0.048, x1: 0.502 },
+    { x0: 0.048, x1: 0.492 },
     { x0: 0.525, x1: 0.958 },
   ];
+  const g = (frame === "1997" || frame === "1993") ? SPLIT_GEOM.old : SPLIT_GEOM.modern;
   for (let i = 0; i < HALVES.length; i++) {
     const tr = texts[i];
     if (!tr) continue;
@@ -864,11 +871,11 @@ function drawSplitOverlay(ctx, W, H, texts, engFaces) {
     // some split frames; the type bar is then painted at its true position.
     if (tr.text) {
       paintTextBox(ctx, W, 0.036 * H, tr.text,
-        (h.x0 + 0.004) * W, 0.605 * H, (h.x1 - 0.005) * W, 0.950 * H);
+        (h.x0 + 0.004) * W, g.textY[0] * H, (h.x1 - 0.008) * W, g.textY[1] * H);
     }
     if (tr.type) {
       // Leave the set symbol (right end of the type bar) visible
-      paintBarText(ctx, W, tr.type, (h.x0 + 0.004) * W, 0.540 * H, (h.x1 - 0.058) * W, 0.600 * H, "bold ");
+      paintBarText(ctx, W, tr.type, (h.x0 + 0.004) * W, g.typeY[0] * H, (h.x1 - 0.058) * W, g.typeY[1] * H, "bold ");
     }
     if (tr.name) {
       // Leave the mana cost fully visible
@@ -995,7 +1002,7 @@ async function buildFaces(entry) {
     bitmap.close?.();
     if (needsOverlay && entry.overlayTexts) {
       drawSplitOverlay(ctx, canvas.width, canvas.height, entry.overlayTexts,
-        entry.english.card_faces || []);
+        entry.english.card_faces || [], print.frame);
     }
     return [canvas.toDataURL("image/jpeg", 0.92)];
   }
