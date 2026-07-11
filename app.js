@@ -739,10 +739,11 @@ async function onLoadCards() {
       entries = entries.filter((e) => e.section !== "maybeboard");
     }
 
-    // Merge duplicates (same name + section)
+    // Merge duplicates by name across all boards: a card can appear in both
+    // the main deck and the sideboard — print the total number of copies.
     const merged = new Map();
     for (const e of entries) {
-      const key = `${e.section}|${e.name.toLowerCase()}`;
+      const key = e.name.toLowerCase();
       if (merged.has(key)) merged.get(key).qty += e.qty;
       else merged.set(key, { ...e });
     }
@@ -791,25 +792,8 @@ function renderGrid() {
   const grid = $("card-grid");
   grid.innerHTML = "";
 
-  const sections = [
-    ["mainboard", "Mainboard"],
-    ["sideboard", "Sideboard"],
-    ["maybeboard", "Considering"],
-  ];
-  const showLabels = sections.filter(([k]) => cards.some((c) => c.section === k)).length > 1;
-
-  for (const [key, label] of sections) {
-    const sectionCards = cards.filter((c) => c.section === key);
-    if (sectionCards.length === 0) continue;
-    if (showLabels) {
-      const el = document.createElement("div");
-      el.className = "section-label";
-      el.textContent = label;
-      grid.appendChild(el);
-    }
-    for (const card of sectionCards) {
-      grid.appendChild(makeTile(card));
-    }
+  for (const card of cards) {
+    grid.appendChild(makeTile(card));
   }
   grid.appendChild(makeAddTile());
 
@@ -951,10 +935,19 @@ function makeAddTile() {
     datalist.id = "card-name-suggestions";
     document.body.appendChild(datalist);
   }
+  const qtyInput = document.createElement("input");
+  qtyInput.type = "number";
+  qtyInput.min = "1";
+  qtyInput.value = "1";
+  qtyInput.className = "add-qty";
+  qtyInput.title = "Number of copies";
   const addBtn = document.createElement("button");
   addBtn.className = "primary";
   addBtn.textContent = "Add";
-  form.append(input, addBtn);
+  const row = document.createElement("div");
+  row.className = "add-row";
+  row.append(qtyInput, addBtn);
+  form.append(input, row);
 
   plus.addEventListener("click", () => {
     plus.classList.add("hidden");
@@ -984,14 +977,17 @@ function makeAddTile() {
   const submit = async () => {
     const name = input.value.trim();
     if (!name) return;
+    const qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
     input.disabled = true;
+    qtyInput.disabled = true;
     addBtn.disabled = true;
     try {
-      await addCustomCard(name);
+      await addCustomCard(name, qty);
     } catch (e) {
       console.error(e);
       setStatus(`Could not add "${name}": ${e.message}`, null, true);
       input.disabled = false;
+      qtyInput.disabled = false;
       addBtn.disabled = false;
     }
   };
@@ -1002,7 +998,7 @@ function makeAddTile() {
   return tile;
 }
 
-async function addCustomCard(name) {
+async function addCustomCard(name, qty = 1) {
   setStatus(`Adding ${name}…`, null);
   const resp = await fetchRetry(`${SCRYFALL}/cards/named?fuzzy=${encodeURIComponent(name)}`);
   if (!resp.ok) throw new Error("card not found on Scryfall");
@@ -1011,7 +1007,7 @@ async function addCustomCard(name) {
   // Already in the list? Just bump the quantity.
   const existing = cards.find((c) => c.english.oracle_id === englishCard.oracle_id);
   if (existing) {
-    existing.qty++;
+    existing.qty += qty;
     hideStatus();
     renderGrid();
     return;
@@ -1023,7 +1019,7 @@ async function addCustomCard(name) {
     : undefined;
   const eng = (await findLocalizedBatch([englishCard.oracle_id], "en")).get(englishCard.oracle_id);
   const built = await buildCardEntry(englishCard, lang, loc, eng);
-  cards.push({ name: englishCard.name, qty: 1, section: "mainboard", ...built });
+  cards.push({ name: englishCard.name, qty, section: "mainboard", ...built });
   hideStatus();
   renderGrid();
 }

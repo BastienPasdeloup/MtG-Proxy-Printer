@@ -212,6 +212,9 @@ button.primary.big { padding: 0.8rem 2.2rem; font-size: 1.1rem; }
   font-size: 0.85rem;
 }
 .add-form button { padding: 0.45rem; font-size: 0.85rem; }
+.add-row { display: flex; gap: 0.5rem; }
+.add-form .add-qty { width: 4.5rem; flex: none; }
+.add-row button { flex: 1; }
 
 .print-select {
   width: 100%;
