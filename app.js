@@ -150,6 +150,7 @@ async function loadMoxfield(url) {
   addBoard(data.companions, "mainboard");
   addBoard(data.mainboard, "mainboard");
   addBoard(data.sideboard, "sideboard");
+  addBoard(data.maybeboard, "maybeboard"); // "Considering" in the Moxfield UI
   if (entries.length === 0) throw new Error("Moxfield deck appears to be empty");
   return { title: data.name || "Moxfield deck", entries };
 }
@@ -734,6 +735,9 @@ async function onLoadCards() {
     if ($("include-sideboard").value === "no") {
       entries = entries.filter((e) => e.section !== "sideboard");
     }
+    if ($("include-maybeboard").value === "no") {
+      entries = entries.filter((e) => e.section !== "maybeboard");
+    }
 
     // Merge duplicates (same name + section)
     const merged = new Map();
@@ -790,12 +794,14 @@ function renderGrid() {
   const sections = [
     ["mainboard", "Mainboard"],
     ["sideboard", "Sideboard"],
+    ["maybeboard", "Considering"],
   ];
+  const showLabels = sections.filter(([k]) => cards.some((c) => c.section === k)).length > 1;
 
   for (const [key, label] of sections) {
     const sectionCards = cards.filter((c) => c.section === key);
     if (sectionCards.length === 0) continue;
-    if (cards.some((c) => c.section === "sideboard")) {
+    if (showLabels) {
       const el = document.createElement("div");
       el.className = "section-label";
       el.textContent = label;
@@ -805,6 +811,7 @@ function renderGrid() {
       grid.appendChild(makeTile(card));
     }
   }
+  grid.appendChild(makeAddTile());
 
   const totalCards = cards.reduce((s, c) => s + c.qty, 0);
   const totalSlots = cards.reduce((s, c) => s + c.qty * c.faces.length, 0);
@@ -918,6 +925,110 @@ function makeTile(card) {
 }
 
 /* ------------------------------------------------------------
+ * "+" tile: add an extra card by name (Scryfall autocomplete)
+ * ---------------------------------------------------------- */
+
+let autocompleteTimer = null;
+
+function makeAddTile() {
+  const tile = document.createElement("div");
+  tile.className = "card-tile add-tile";
+
+  const plus = document.createElement("button");
+  plus.className = "add-plus";
+  plus.textContent = "+";
+  plus.title = "Add a card to the list";
+
+  const form = document.createElement("div");
+  form.className = "add-form hidden";
+  const input = document.createElement("input");
+  input.type = "text";
+  input.placeholder = "Card name…";
+  input.setAttribute("list", "card-name-suggestions");
+  let datalist = $("card-name-suggestions");
+  if (!datalist) {
+    datalist = document.createElement("datalist");
+    datalist.id = "card-name-suggestions";
+    document.body.appendChild(datalist);
+  }
+  const addBtn = document.createElement("button");
+  addBtn.className = "primary";
+  addBtn.textContent = "Add";
+  form.append(input, addBtn);
+
+  plus.addEventListener("click", () => {
+    plus.classList.add("hidden");
+    form.classList.remove("hidden");
+    input.focus();
+  });
+
+  input.addEventListener("input", () => {
+    clearTimeout(autocompleteTimer);
+    const q = input.value.trim();
+    if (q.length < 2) return;
+    autocompleteTimer = setTimeout(async () => {
+      try {
+        const resp = await fetch(`${SCRYFALL}/cards/autocomplete?q=${encodeURIComponent(q)}`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        datalist.innerHTML = "";
+        for (const name of (data.data || []).slice(0, 12)) {
+          const opt = document.createElement("option");
+          opt.value = name;
+          datalist.appendChild(opt);
+        }
+      } catch { /* suggestions are best-effort */ }
+    }, 250);
+  });
+
+  const submit = async () => {
+    const name = input.value.trim();
+    if (!name) return;
+    input.disabled = true;
+    addBtn.disabled = true;
+    try {
+      await addCustomCard(name);
+    } catch (e) {
+      console.error(e);
+      setStatus(`Could not add "${name}": ${e.message}`, null, true);
+      input.disabled = false;
+      addBtn.disabled = false;
+    }
+  };
+  addBtn.addEventListener("click", submit);
+  input.addEventListener("keydown", (e) => { if (e.key === "Enter") submit(); });
+
+  tile.append(plus, form);
+  return tile;
+}
+
+async function addCustomCard(name) {
+  setStatus(`Adding ${name}…`, null);
+  const resp = await fetchRetry(`${SCRYFALL}/cards/named?fuzzy=${encodeURIComponent(name)}`);
+  if (!resp.ok) throw new Error("card not found on Scryfall");
+  const englishCard = await resp.json();
+
+  // Already in the list? Just bump the quantity.
+  const existing = cards.find((c) => c.english.oracle_id === englishCard.oracle_id);
+  if (existing) {
+    existing.qty++;
+    hideStatus();
+    renderGrid();
+    return;
+  }
+
+  const lang = currentLang;
+  const loc = lang !== "en"
+    ? (await findLocalizedBatch([englishCard.oracle_id], lang)).get(englishCard.oracle_id)
+    : undefined;
+  const eng = (await findLocalizedBatch([englishCard.oracle_id], "en")).get(englishCard.oracle_id);
+  const built = await buildCardEntry(englishCard, lang, loc, eng);
+  cards.push({ name: englishCard.name, qty: 1, section: "mainboard", ...built });
+  hideStatus();
+  renderGrid();
+}
+
+/* ------------------------------------------------------------
  * PDF generation: A4, 3 x 3 grid, 62 x 87 mm cards
  * ---------------------------------------------------------- */
 
@@ -1000,4 +1111,8 @@ $("retry-btn").addEventListener("click", onRetryFailed);
 $("generate-btn").addEventListener("click", onGeneratePdf);
 $("deck-url").addEventListener("keydown", (e) => {
   if (e.key === "Enter") onLoadCards();
+});
+// The "Considering" board only exists on Moxfield
+$("deck-url").addEventListener("input", () => {
+  $("maybeboard-wrap").classList.toggle("hidden", !/moxfield\.com/i.test($("deck-url").value));
 });

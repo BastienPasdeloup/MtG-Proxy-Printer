@@ -185,6 +185,34 @@ button.primary.big { padding: 0.8rem 2.2rem; font-size: 1.1rem; }
 .badge-mt { background: #d08030; }
 .badge-english { background: #8a8fa3; }
 
+.add-tile {
+  border-style: dashed;
+  align-items: center;
+  justify-content: center;
+  min-height: 240px;
+}
+.add-plus {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 3.5rem;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+.add-plus:hover { color: var(--accent); }
+.add-form { display: flex; flex-direction: column; gap: 0.5rem; width: 100%; }
+.add-form input {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.85rem;
+}
+.add-form button { padding: 0.45rem; font-size: 0.85rem; }
+
 .print-select {
   width: 100%;
   font-size: 0.72rem;

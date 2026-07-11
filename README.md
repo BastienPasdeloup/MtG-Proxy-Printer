@@ -7,8 +7,10 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
 
 1. Paste a **Moxfield** (`moxfield.com/decks/…`) or **MTGTop8** (`mtgtop8.com/event?e=…&d=…`) deck URL
    (or paste a plain-text decklist).
-2. Pick a **language**.
+2. Pick a **language**, and choose whether to include the sideboard (and, for Moxfield decks,
+   the "Considering" board).
 3. Click **Load Cards** — card images are fetched from [Scryfall](https://scryfall.com) in the chosen language.
+   A **+** tile at the end of the grid lets you add extra cards by name (with autocompletion).
 4. Adjust the deck: remove cards, change quantities, pick another printing from the dropdown
    under each card — it lists the chosen language's printings and the English ones (translated
    on the fly when selected), sorted by release date (double-faced cards: click the image to flip).
