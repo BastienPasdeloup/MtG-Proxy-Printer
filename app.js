@@ -1137,11 +1137,15 @@ async function buildCardEntry(englishCard, lang, loc, eng, prefPrint, versionMod
 }
 
 // Whether the selected print could take a translation overlay (regardless
-// of the user's "keep English" choice).
+// of the user's "keep English" choice). Game-aid helpers (type "Card":
+// The Monarch, Storm Counter…) and Dungeons are freeform panels or maps
+// with no standard frame — they keep their English scan.
 function printTranslatable(entry) {
   const print = entry.prints[entry.printIndex];
+  const frontType = (entry.english.card_faces?.[0]?.type_line ?? entry.english.type_line) || "";
   return entry.lang !== "en" && print.lang !== entry.lang &&
-    OVERLAY_LAYOUTS.has(entry.english.layout);
+    OVERLAY_LAYOUTS.has(entry.english.layout) &&
+    !/^Card\b|\bDungeon\b/.test(frontType);
 }
 
 function printNeedsOverlay(entry) {
@@ -1300,7 +1304,8 @@ async function loadEntries(entries, lang, sortByType = false) {
       const built = await buildCardEntry(englishCard, lang,
         localizedMap.get(englishCard.oracle_id), englishMap.get(englishCard.oracle_id),
         entry.print, versionMode);
-      cards.push({ name: entry.name, qty: entry.qty, section: entry.section, ...built });
+      cards.push({ name: entry.name, qty: entry.qty, section: entry.section,
+        helper: entry.helper, ...built });
     } catch (e) {
       console.error(`Failed to build ${entry.name}:`, e);
       failed.push(entry);
@@ -1315,6 +1320,46 @@ async function loadEntries(entries, lang, sortByType = false) {
 // tokens whose last producing card was removed.
 const tokenPartOracle = new Map();
 
+// Cards whose rules reference a shared game aid come with the matching
+// helper card(s) when tokens are included. Helpers are exact Scryfall card
+// names ("Card" / "Dungeon" type game aids, e.g. The Monarch, dungeons).
+const MECHANIC_HELPERS = [
+  { key: "ascend", test: (c) => (c.keywords || []).includes("Ascend"),
+    helpers: ["City's Blessing"] },
+  { key: "monarch", test: (c) => /becomes? the monarch/i.test(oracleTextOf(c)),
+    helpers: ["The Monarch"] },
+  { key: "dungeon", test: (c) => /venture into the dungeon/i.test(oracleTextOf(c)),
+    helpers: ["Lost Mine of Phandelver", "Dungeon of the Mad Mage", "Tomb of Annihilation"] },
+  { key: "initiative", test: (c) => /takes? the initiative|venture into undercity/i.test(oracleTextOf(c)),
+    helpers: ["Undercity // The Initiative"] },
+  { key: "engines", test: (c) => /start your engines/i.test(oracleTextOf(c)),
+    helpers: ["Start Your Engines! // Max Speed"] },
+  { key: "energy", test: (c) => oracleTextOf(c).includes("{E}"),
+    helpers: ["Energy Reserve"] },
+  { key: "storm", test: (c) => (c.keywords || []).includes("Storm"),
+    helpers: ["Storm Counter"] },
+];
+
+function oracleTextOf(c) {
+  const faces = c.card_faces?.length ? c.card_faces : [c];
+  return faces.map((f) => f.oracle_text || "").join("\n");
+}
+
+const helperCardCache = new Map();
+async function fetchHelperCard(name) {
+  if (helperCardCache.has(name)) return helperCardCache.get(name);
+  let card = null;
+  try {
+    const resp = await fetchRetry(`${SCRYFALL}/cards/named?exact=${encodeURIComponent(name)}`);
+    if (resp.ok) card = await resp.json();
+  } catch (e) {
+    console.warn(`Helper card "${name}" could not be fetched:`, e);
+  }
+  helperCardCache.set(name, card);
+  await sleep(100);
+  return card;
+}
+
 // Tokens (and emblems) that the given English cards can create, as
 // loadEntries entries. Scryfall lists them in each card's `all_parts`:
 // tokens have component "token"; emblems are "combo_piece" with an Emblem
@@ -1323,17 +1368,31 @@ const tokenPartOracle = new Map();
 // oracle_id — including against tokens already in the grid.
 async function collectTokenEntries(englishCards) {
   const partIds = new Set();
-  for (const card of englishCards) {
+  const collectParts = (card) => {
     for (const part of card?.all_parts || []) {
       if (part.id === card.id) continue;
       if (part.component === "token" || (part.type_line || "").startsWith("Emblem")) {
         partIds.add(part.id);
       }
     }
-  }
-  if (partIds.size === 0) return [];
+  };
+  englishCards.forEach(collectParts);
 
-  setStatus(`Fetching ${partIds.size} token(s)…`, 0.02);
+  // Mechanic helper cards (monarch, dungeons, energy reserve…)
+  const helpers = [];
+  for (const rule of MECHANIC_HELPERS) {
+    if (!englishCards.some((c) => rule.test(c))) continue;
+    for (const name of rule.helpers) {
+      const card = await fetchHelperCard(name);
+      if (card) helpers.push({ card, rule: rule.key });
+    }
+  }
+  // Tokens the helper cards themselves create (e.g. dungeon room rewards)
+  helpers.forEach((h) => collectParts(h.card));
+
+  if (partIds.size === 0 && helpers.length === 0) return [];
+
+  setStatus(`Fetching ${partIds.size + helpers.length} token(s)…`, 0.02);
   const tokens = [];
   const idList = [...partIds];
   for (let i = 0; i < idList.length; i += 75) {
@@ -1350,36 +1409,51 @@ async function collectTokenEntries(englishCards) {
 
   const already = new Set(cards.map((c) => c.english.oracle_id));
   const byOracle = new Map();
+  for (const h of helpers) {
+    if (!already.has(h.card.oracle_id) && !byOracle.has(h.card.oracle_id)) {
+      byOracle.set(h.card.oracle_id, { card: h.card, helper: h.rule });
+    }
+  }
   for (const t of tokens) {
     tokenPartOracle.set(t.id, t.oracle_id);
-    if (!already.has(t.oracle_id) && !byOracle.has(t.oracle_id)) byOracle.set(t.oracle_id, t);
+    if (!already.has(t.oracle_id) && !byOracle.has(t.oracle_id)) byOracle.set(t.oracle_id, { card: t });
   }
   return [...byOracle.values()]
-    .sort((a, b) => a.name.localeCompare(b.name) || typeRank(a) - typeRank(b))
-    .map((t) => ({ name: t.name, qty: 1, section: "tokens", card: t }));
+    .sort((a, b) => a.card.name.localeCompare(b.card.name) || typeRank(a.card) - typeRank(b.card))
+    .map(({ card, helper }) => ({ name: card.name, qty: 1, section: "tokens", card, helper }));
 }
 
 // Drop token-category entries whose producing cards have all been removed.
 // Matching goes through tokenPartOracle (all_parts holds printing ids, the
 // grid holds oracles); parts never seen by collectTokenEntries fall back to
-// a name match — over-keeping is safer than wrongly removing.
+// a name match — over-keeping is safer than wrongly removing. Mechanic
+// helper cards stay as long as one remaining card matches their rule, and
+// tokens created by surviving helpers (dungeon room rewards) stay with them.
 function pruneOrphanTokens() {
-  if (!cards.some((c) => c.section === "tokens")) return;
+  const tokenEntries = cards.filter((c) => c.section === "tokens");
+  if (!tokenEntries.length) return;
+  const regular = cards.filter((c) => c.section !== "tokens");
   const wantedOracles = new Set();
   const wantedNames = new Set();
-  for (const c of cards) {
-    if (c.section === "tokens") continue;
-    for (const part of c.english.all_parts || []) {
-      if (part.id === c.english.id) continue;
+  const addParts = (card) => {
+    for (const part of card.all_parts || []) {
+      if (part.id === card.id) continue;
       if (part.component === "token" || (part.type_line || "").startsWith("Emblem")) {
         const oid = tokenPartOracle.get(part.id);
         if (oid) wantedOracles.add(oid);
         else wantedNames.add(part.name);
       }
     }
-  }
-  cards = cards.filter((c) => c.section !== "tokens" ||
-    wantedOracles.has(c.english.oracle_id) || wantedNames.has(c.english.name));
+  };
+  regular.forEach((c) => addParts(c.english));
+  const activeRules = new Set(MECHANIC_HELPERS
+    .filter((r) => regular.some((c) => r.test(c.english)))
+    .map((r) => r.key));
+  const keep = (t) => t.helper
+    ? activeRules.has(t.helper)
+    : wantedOracles.has(t.english.oracle_id) || wantedNames.has(t.english.name);
+  tokenEntries.filter(keep).forEach((t) => addParts(t.english));
+  cards = cards.filter((c) => c.section !== "tokens" || keep(c));
 }
 
 function reportLoadResult() {

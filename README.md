@@ -11,7 +11,10 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    created by the deck's cards (excluded by default — they appear in their own category at the
    end of the grid, translated like any other card, and disappear automatically when their last
    producing card is removed) and, for Moxfield decks,
-   the "Considering" board. For Moxfield decks, a **Preferred version** dropdown chooses between
+   the "Considering" board. Including tokens also brings the **game-aid helper cards** the deck
+   calls for: City's Blessing (ascend), The Monarch, the dungeons and their reward tokens
+   (venture / initiative), Start Your Engines!, Energy Reserve ({E}) and a Storm counter card.
+   For Moxfield decks, a **Preferred version** dropdown chooses between
    keeping the exact printings from the Moxfield page (same artworks, more text-overlay
    translations) or swapping to printings in the chosen language when the Moxfield one
    was never printed in it (default).
