@@ -7,8 +7,9 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
 
 1. Paste a **Moxfield** (`moxfield.com/decks/…`) or **MTGTop8** (`mtgtop8.com/event?e=…&d=…`) deck URL
    (or paste a plain-text decklist).
-2. Pick a **language**, and choose whether to include the sideboard (and, for Moxfield decks,
-   the "Considering" board). For Moxfield decks, a **Preferred version** dropdown chooses between
+2. Pick a **language**, and choose whether to include the sideboard, the **tokens** (and emblems)
+   created by the deck's cards (excluded by default) and, for Moxfield decks,
+   the "Considering" board. For Moxfield decks, a **Preferred version** dropdown chooses between
    keeping the exact printings from the Moxfield page (same artworks, more text-overlay
    translations) or swapping to printings in the chosen language when the Moxfield one
    was never printed in it (default).

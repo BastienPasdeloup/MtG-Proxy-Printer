@@ -1175,7 +1175,7 @@ let currentLang = "en";
 
 // Deck-page display order: commanders first, then type groups as shown on
 // Moxfield, alphabetical within each group.
-const SECTION_RANK = { commander: 0, mainboard: 1, sideboard: 2, maybeboard: 3 };
+const SECTION_RANK = { commander: 0, mainboard: 1, sideboard: 2, maybeboard: 3, tokens: 4 };
 
 function typeRank(card) {
   const tl = (card?.type_line || "").split("//")[0].toLowerCase();
@@ -1191,21 +1191,24 @@ function typeRank(card) {
 }
 
 // Resolve and build the given entries, appending successes to `cards`.
-// Returns the entries that could not be loaded.
+// Entries may carry a pre-resolved Scryfall card object in `card` (used for
+// tokens, which cannot be resolved by name — a token often shares its name
+// with a real card). Returns the entries that could not be loaded.
 async function loadEntries(entries, lang, sortByType = false) {
   setStatus(`Resolving ${entries.length} cards on Scryfall…`, 0.02);
-  const uniqueNames = [...new Set(entries.map((e) => e.name))];
-  const { found } = await resolveCards(uniqueNames);
+  const uniqueNames = [...new Set(entries.filter((e) => !e.card).map((e) => e.name))];
+  const { found } = uniqueNames.length ? await resolveCards(uniqueNames) : { found: new Map() };
+  const cardOf = (e) => e.card || found.get(e.name.toLowerCase());
 
   if (sortByType) {
     entries = entries.slice().sort((a, b) =>
       ((SECTION_RANK[a.section] ?? 1) - (SECTION_RANK[b.section] ?? 1)) ||
-      (typeRank(found.get(a.name.toLowerCase())) - typeRank(found.get(b.name.toLowerCase()))) ||
+      (typeRank(cardOf(a)) - typeRank(cardOf(b))) ||
       a.name.localeCompare(b.name));
   }
 
   const oracleIds = [...new Set(
-    entries.map((e) => found.get(e.name.toLowerCase())?.oracle_id).filter(Boolean)
+    entries.map((e) => cardOf(e)?.oracle_id).filter(Boolean)
   )];
 
   let localizedMap = new Map();
@@ -1228,7 +1231,7 @@ async function loadEntries(entries, lang, sortByType = false) {
   for (const entry of entries) {
     done++;
     setStatus(`Fetching images (${done}/${total}): ${entry.name}`, 0.12 + 0.88 * (done / total));
-    const englishCard = found.get(entry.name.toLowerCase());
+    const englishCard = cardOf(entry);
     if (!englishCard) { failed.push(entry); continue; }
     try {
       const built = await buildCardEntry(englishCard, lang,
@@ -1242,6 +1245,47 @@ async function loadEntries(entries, lang, sortByType = false) {
     await sleep(60); // images come from Scryfall's CDN, which is not rate-limited
   }
   return failed;
+}
+
+// Tokens (and emblems) that the loaded cards can create, as loadEntries
+// entries. Scryfall lists them in each card's `all_parts`: tokens have
+// component "token"; emblems are "combo_piece" with an Emblem type line
+// (the card itself is also listed and must be skipped). Different cards
+// reference different printings of the same token, so dedupe by oracle_id.
+async function collectTokenEntries() {
+  const partIds = new Set();
+  for (const card of cards) {
+    for (const part of card.english?.all_parts || []) {
+      if (part.id === card.english.id) continue;
+      if (part.component === "token" || (part.type_line || "").startsWith("Emblem")) {
+        partIds.add(part.id);
+      }
+    }
+  }
+  if (partIds.size === 0) return [];
+
+  setStatus(`Fetching ${partIds.size} token(s)…`, 0.02);
+  const tokens = [];
+  const idList = [...partIds];
+  for (let i = 0; i < idList.length; i += 75) {
+    const chunk = idList.slice(i, i + 75);
+    const resp = await fetchRetry(`${SCRYFALL}/cards/collection`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ identifiers: chunk.map((id) => ({ id })) }),
+    });
+    if (!resp.ok) throw new Error(`Scryfall error (HTTP ${resp.status})`);
+    tokens.push(...((await resp.json()).data || []));
+    await sleep(100);
+  }
+
+  const byOracle = new Map();
+  for (const t of tokens) {
+    if (!byOracle.has(t.oracle_id)) byOracle.set(t.oracle_id, t);
+  }
+  return [...byOracle.values()]
+    .sort((a, b) => a.name.localeCompare(b.name) || typeRank(a) - typeRank(b))
+    .map((t) => ({ name: t.name, qty: 1, section: "tokens", card: t }));
 }
 
 function reportLoadResult() {
@@ -1290,6 +1334,14 @@ async function onLoadCards() {
 
     currentLang = $("language").value;
     failedEntries = await loadEntries(entries, currentLang, !!deck.sortByType);
+
+    if ($("include-tokens").value === "yes") {
+      const tokenEntries = await collectTokenEntries();
+      if (tokenEntries.length) {
+        failedEntries.push(...await loadEntries(tokenEntries, currentLang));
+      }
+    }
+
     reportLoadResult();
   } catch (e) {
     console.error(e);
