@@ -908,6 +908,21 @@ async function machineTranslate(text, lang) {
   throw lastError || new Error("All translators failed");
 }
 
+// Translated name of a deck card (or of one of its faces) whose English
+// name is `engName` — used to name emblems after their producing card.
+function deckFaceName(engName) {
+  for (const c of cards) {
+    if (!c.english) continue;
+    if (c.english.name === engName) return c.printedName || null;
+    const idx = (c.english.card_faces || []).findIndex((f) => f.name === engName);
+    if (idx >= 0) {
+      const parts = (c.printedName || "").split(" // ");
+      return parts[idx] || parts[0] || null;
+    }
+  }
+  return null;
+}
+
 // Build per-face {name, type, text} in the target language.
 async function resolveTranslations(englishCard, lang, loc) {
   const faces = englishCard.card_faces?.length ? englishCard.card_faces : [englishCard];
@@ -937,14 +952,15 @@ async function resolveTranslations(englishCard, lang, loc) {
         const sub = /\bToken\b/.test(face.type_line || "") && !face.name.includes(" ")
           ? SUBTYPE_DICT[lang]?.[face.name.toLowerCase()] : null;
         // Emblems are named after the card that produces them: reuse that
-        // card's translated name from the deck.
-        const emblemProducer = /^Emblem\b/.test(face.type_line || "")
-          ? cards.find((c) => c.english?.name === face.name.replace(/ Emblem$/, ""))
+        // card's translated name from the deck (the producer may be one
+        // face of a double-faced planeswalker).
+        const producerName = /^Emblem\b/.test(face.type_line || "")
+          ? deckFaceName(face.name.replace(/ Emblem$/, ""))
           : null;
         if (HELPER_NAMES[face.name]?.[lang]) {
           t.name = HELPER_NAMES[face.name][lang];
-        } else if (emblemProducer?.printedName) {
-          t.name = emblemProducer.printedName;
+        } else if (producerName) {
+          t.name = producerName;
         } else if (sub) {
           t.name = sub.charAt(0).toUpperCase() + sub.slice(1);
         } else if (/\bDungeon\b/.test(face.type_line || "")) {

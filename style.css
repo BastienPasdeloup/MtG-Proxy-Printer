@@ -207,6 +207,7 @@ button.primary.big { padding: 0.8rem 2.2rem; font-size: 1.1rem; }
   min-width: 34px; /* same width as the flip button */
   text-align: center;
   border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.75);
   color: #fff;
 }
 .legend .badge { position: static; margin-right: 0.4rem; min-width: 0; }
