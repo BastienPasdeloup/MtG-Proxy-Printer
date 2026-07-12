@@ -160,13 +160,33 @@ async function loadMoxfield(url) {
   return { title: data.name || "Moxfield deck", entries, sortByType: true };
 }
 
+// The event page's document title is "Archetype - Player @ mtgtop8.com";
+// the archetype (the entry selected in the left listing) is what we want.
+async function fetchMtgTop8Title(eventUrl) {
+  try {
+    const md = await fetch(`https://r.jina.ai/${eventUrl}`, { signal: AbortSignal.timeout(45000) })
+      .then((r) => (r.ok ? r.text() : ""));
+    const line = md.match(/^Title:\s*(.+)$/m)?.[1] || "";
+    const name = line.replace(/\s*@\s*mtgtop8\.com\s*$/i, "").trim();
+    if (!name) return null;
+    // Drop the trailing " - Player" segment, keep the archetype
+    const parts = name.split(" - ");
+    return parts.length > 1 ? parts.slice(0, -1).join(" - ") : name;
+  } catch {
+    return null;
+  }
+}
+
 async function loadMtgTop8(url) {
   const m = url.match(/[?&]d=(\d+)/);
   if (!m) throw new Error("Could not extract deck ID (d=…) from MTGTop8 URL");
-  const text = await fetchWithProxies(`https://mtgtop8.com/mtgo?d=${m[1]}`);
+  const [text, title] = await Promise.all([
+    fetchWithProxies(`https://mtgtop8.com/mtgo?d=${m[1]}`),
+    fetchMtgTop8Title(url),
+  ]);
   const parsed = parseDeckText(text);
   if (parsed.entries.length === 0) throw new Error("MTGTop8 deck appears to be empty");
-  parsed.title = "MTGTop8 deck";
+  parsed.title = title || "MTGTop8 deck";
   parsed.sortByType = true;
   return parsed;
 }
@@ -2046,19 +2066,24 @@ function renderGrid() {
   const grid = $("card-grid");
   grid.innerHTML = "";
 
-  // Tokens sit in their own category at the end; the "+" tile (add a card)
-  // comes right after the last regular card, not in the token category.
+  // Cards sit under a "Cards" heading; tokens get their own category at the
+  // end. The "+" tile (add a card) comes right after the last regular card,
+  // not in the token category.
   const regular = cards.filter((c) => c.section !== "tokens");
   const tokens = cards.filter((c) => c.section === "tokens");
+  const sectionLabel = (text) => {
+    const label = document.createElement("div");
+    label.className = "section-label";
+    label.textContent = text;
+    grid.appendChild(label);
+  };
+  sectionLabel("Cards");
   for (const card of regular) {
     grid.appendChild(makeTile(card));
   }
   grid.appendChild(makeAddTile());
   if (tokens.length) {
-    const label = document.createElement("div");
-    label.className = "section-label";
-    label.textContent = "Tokens";
-    grid.appendChild(label);
+    sectionLabel("Tokens");
     for (const card of tokens) {
       grid.appendChild(makeTile(card));
     }
