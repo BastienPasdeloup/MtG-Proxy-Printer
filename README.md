@@ -23,8 +23,9 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    A **+** tile at the end of the grid lets you add extra cards by name (with autocompletion).
 4. Adjust the deck: remove cards, change quantities, pick another printing from the dropdown
    under each card — it lists the chosen language's printings and the English ones (translated
-   on the fly when selected), sorted by release date (double-faced cards: click the image to flip).
-   Double-click a translated card image to edit its name, type line and text manually.
+   on the fly when selected), sorted by release date (double-faced cards flip with the arrows
+   button at the bottom left of the image). The hand button at the bottom right of a translated
+   card edits its name, type line and text manually.
 5. Click **Generate Proxies** — downloads an A4 PDF with 9 cards per page, each 62 × 87 mm, with cut marks.
    If the deck contains double-sided cards, you are asked whether to print backs too.
    Print at **100% scale** (no "fit to page").

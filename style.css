@@ -142,10 +142,9 @@ button.primary.big { padding: 0.8rem 2.2rem; font-size: 1.1rem; }
 .card-tile.wide .badge { top: 3rem; right: calc(5.5% + 0.9rem); }
 
 .img-wrap { position: relative; }
-.flip-btn {
+.flip-btn, .edit-btn {
   position: absolute;
   bottom: 0.4rem;
-  right: 0.4rem;
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -158,8 +157,13 @@ button.primary.big { padding: 0.8rem 2.2rem; font-size: 1.1rem; }
   justify-content: center;
   padding: 0;
 }
-.flip-btn:hover { background: var(--accent); color: #1a1508; }
-.flip-btn svg { width: 20px; height: 20px; fill: currentColor; }
+.flip-btn { left: 0.4rem; }
+.edit-btn { right: 0.4rem; }
+.flip-btn:hover, .edit-btn:hover { background: var(--accent); color: #1a1508; }
+.flip-btn svg, .edit-btn svg { width: 20px; height: 20px; fill: currentColor; }
+/* keep the buttons on the (narrower, centered) landscape card */
+.card-tile.wide .flip-btn { left: calc(5.5% + 0.4rem); }
+.card-tile.wide .edit-btn { right: calc(5.5% + 0.4rem); }
 
 .card-name {
   font-size: 0.8rem;

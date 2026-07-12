@@ -1828,6 +1828,7 @@ function makeTile(card) {
       img.src = card.faces[0];
       card.status = computeStatus(card);
       updateBadge(badgeEl, card);
+      updateEditBtn();
     } catch (e) {
       console.error(e);
       setStatus(`Could not update ${card.name}: ${e.message}`, null, true);
@@ -1845,28 +1846,33 @@ function makeTile(card) {
   img.src = card.faces[0];
   img.alt = card.name;
   img.loading = "lazy";
-  img.addEventListener("dblclick", () => openEditDialog(card, img, tile));
-  if (printTranslatable(card)) {
-    img.title = "Double-click to edit the translated text";
-  }
   imgWrap.appendChild(img);
+
+  // Hand button (bottom right): edit the translated text — shown only
+  // while the card displays a translation overlay.
+  const editBtn = document.createElement("button");
+  editBtn.className = "edit-btn";
+  editBtn.title = "Edit the translated text";
+  editBtn.innerHTML =
+    '<svg viewBox="0 0 24 24"><path d="M9 11.24V7.5a2.5 2.5 0 0 1 5 0v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63l-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6a1.5 1.5 0 0 0-3 0v10.74l-3.44-.72c-.37-.08-.76.04-1.03.31-.43.44-.43 1.14 0 1.58l4.79 4.79c.28.28.66.44 1.06.44h6.87c.75 0 1.38-.55 1.48-1.29l.75-5.27c.11-.8-.31-1.56-1.04-1.9z"/></svg>';
+  editBtn.addEventListener("click", () => openEditDialog(card, img, tile));
+  imgWrap.appendChild(editBtn);
+  const updateEditBtn = () =>
+    editBtn.classList.toggle("hidden", !printNeedsOverlay(card));
+  updateEditBtn();
+
+  // Flipping a double-sided card happens only via its icon (bottom left)
   if (card.faces.length > 1) {
     let face = 0;
-    const flip = () => {
-      face = (face + 1) % card.faces.length;
-      img.src = card.faces[face];
-    };
-    img.style.cursor = "pointer";
-    img.title = printTranslatable(card)
-      ? "Click to flip · double-click to edit the translated text"
-      : "Click to flip";
-    img.addEventListener("click", flip);
     const flipBtn = document.createElement("button");
     flipBtn.className = "flip-btn";
     flipBtn.title = "Show the other side";
     flipBtn.innerHTML =
       '<svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
-    flipBtn.addEventListener("click", (e) => { e.stopPropagation(); flip(); });
+    flipBtn.addEventListener("click", () => {
+      face = (face + 1) % card.faces.length;
+      img.src = card.faces[face];
+    });
     imgWrap.appendChild(flipBtn);
   }
   tile.appendChild(imgWrap);
@@ -1893,6 +1899,7 @@ function makeTile(card) {
         img.src = card.faces[0];
         card.status = computeStatus(card);
         updateBadge(badgeEl, card);
+        updateEditBtn();
       } catch (e) {
         console.error(e);
         setStatus(`Could not load that printing of ${card.name}: ${e.message}`, null, true);
