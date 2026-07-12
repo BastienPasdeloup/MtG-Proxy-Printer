@@ -242,7 +242,7 @@ button.primary.big {
 /* flip button sits just below the badge */
 .flip-btn {
   position: absolute;
-  top: 3.8rem;
+  top: 4rem;
   right: 0.55rem;
   width: 34px;
   height: 34px;
@@ -326,7 +326,7 @@ button.primary.big {
 
 .badge {
   position: absolute;
-  top: 2.1rem;
+  top: 2.3rem;
   /* below the title bar, so the casting cost stays visible */
   right: 0.55rem;
   /* same axis as the flip button below it */
