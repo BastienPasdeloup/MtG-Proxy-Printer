@@ -139,7 +139,7 @@ button.primary.big { padding: 0.8rem 2.2rem; font-size: 1.1rem; }
 .card-tile.wide { grid-column: span 2; }
 .card-tile.wide img { width: 89%; margin: 0 auto; }
 /* keep the badge on the (narrower, landscape) card, below its title bar */
-.card-tile.wide .badge { top: 3rem; right: calc(5.5% + 0.9rem); }
+.card-tile.wide .badge { top: 2.5rem; right: calc(5.5% + 0.55rem); }
 
 .img-wrap { position: relative; }
 /* flip button sits just below the badge */
@@ -162,7 +162,7 @@ button.primary.big { padding: 0.8rem 2.2rem; font-size: 1.1rem; }
 .flip-btn:hover { background: var(--accent); color: #1a1508; }
 .flip-btn svg { width: 20px; height: 20px; fill: currentColor; }
 /* keep the button on the (narrower, centered) landscape card */
-.card-tile.wide .flip-btn { top: 3.9rem; right: calc(5.5% + 0.75rem); }
+.card-tile.wide .flip-btn { top: 3.9rem; right: calc(5.5% + 0.55rem); }
 
 .card-name {
   font-size: 0.8rem;
@@ -198,16 +198,18 @@ button.primary.big { padding: 0.8rem 2.2rem; font-size: 1.1rem; }
 
 .badge {
   position: absolute;
-  top: 2.6rem; /* below the title bar, so the casting cost stays visible */
-  right: 0.7rem;
+  top: 2.1rem; /* below the title bar, so the casting cost stays visible */
+  right: 0.55rem; /* same axis as the flip button below it */
   z-index: 2;
   font-size: 0.7rem;
   font-weight: 700;
   padding: 0.15rem 0.45rem;
+  min-width: 34px; /* same width as the flip button */
+  text-align: center;
   border-radius: 999px;
   color: #fff;
 }
-.legend .badge { position: static; margin-right: 0.4rem; }
+.legend .badge { position: static; margin-right: 0.4rem; min-width: 0; }
 .badge-click { cursor: pointer; }
 .badge-click:hover { outline: 2px solid rgba(255, 255, 255, 0.6); }
 .badge-localized { background: var(--green); }

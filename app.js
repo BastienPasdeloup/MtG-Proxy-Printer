@@ -936,8 +936,15 @@ async function resolveTranslations(englishCard, lang, loc) {
         // take the official subtype word, not machine translation.
         const sub = /\bToken\b/.test(face.type_line || "") && !face.name.includes(" ")
           ? SUBTYPE_DICT[lang]?.[face.name.toLowerCase()] : null;
+        // Emblems are named after the card that produces them: reuse that
+        // card's translated name from the deck.
+        const emblemProducer = /^Emblem\b/.test(face.type_line || "")
+          ? cards.find((c) => c.english?.name === face.name.replace(/ Emblem$/, ""))
+          : null;
         if (HELPER_NAMES[face.name]?.[lang]) {
           t.name = HELPER_NAMES[face.name][lang];
+        } else if (emblemProducer?.printedName) {
+          t.name = emblemProducer.printedName;
         } else if (sub) {
           t.name = sub.charAt(0).toUpperCase() + sub.slice(1);
         } else if (/\bDungeon\b/.test(face.type_line || "")) {
@@ -2150,12 +2157,12 @@ function makeTile(card) {
     img.style.opacity = "";
     delete badgeEl.dataset.busy;
   });
-  tile.appendChild(badgeEl);
 
   tile.classList.toggle("wide", !!card.rotated);
 
   const imgWrap = document.createElement("div");
   imgWrap.className = "img-wrap";
+  imgWrap.appendChild(badgeEl);
   const img = document.createElement("img");
   img.src = card.faces[0];
   img.alt = card.name;
