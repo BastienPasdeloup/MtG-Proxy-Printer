@@ -6,7 +6,8 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
 ## Usage
 
 1. Paste a **Moxfield** (`moxfield.com/decks/…`) or **MTGTop8** (`mtgtop8.com/event?e=…&d=…`) deck URL
-   (or paste a plain-text decklist).
+   and/or paste a plain-text decklist (both load together when both are given). With no input at all,
+   **Load Cards** offers to start an empty deck built card by card with the "+" tile.
 2. Pick a **language**, and choose whether to include the sideboard, the **tokens** (and emblems)
    created by the deck's cards (excluded by default — they appear in their own category at the
    end of the grid, translated like any other card, and disappear automatically when their last
@@ -23,6 +24,7 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
 4. Adjust the deck: remove cards, change quantities, pick another printing from the dropdown
    under each card — it lists the chosen language's printings and the English ones (translated
    on the fly when selected), sorted by release date (double-faced cards: click the image to flip).
+   Double-click a translated card image to edit its name, type line and text manually.
 5. Click **Generate Proxies** — downloads an A4 PDF with 9 cards per page, each 62 × 87 mm, with cut marks.
    If the deck contains double-sided cards, you are asked whether to print backs too.
    Print at **100% scale** (no "fit to page").

@@ -305,3 +305,25 @@ footer a { color: var(--accent); }
 
 #version-wrap { flex: 1 1 240px; min-width: 220px; }
 #preferred-version { width: 100%; }
+
+#edit-dialog { width: min(560px, 92vw); max-width: 560px; }
+#edit-fields fieldset {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin: 0 0 0.8rem;
+  padding: 0.4rem 0.8rem 0.8rem;
+}
+#edit-fields legend { color: var(--accent); font-size: 0.85rem; padding: 0 0.4rem; }
+#edit-fields label { margin-top: 0.5rem; }
+#edit-fields input, #edit-fields textarea {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 0.45rem 0.6rem;
+  font-size: 0.9rem;
+  font-family: inherit;
+  margin-top: 0.2rem;
+  resize: vertical;
+}

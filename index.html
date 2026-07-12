@@ -123,9 +123,29 @@
         <li><span class="badge badge-english">EN</span> Kept in English.</li>
       </ul>
       <p class="legend-note">Click a <strong>T</strong>/<strong>MT</strong> badge to keep the English text instead
-        (click again to restore the translation).</p>
+        (click again to restore the translation).
+        Double-click a translated card image to edit its text manually.</p>
     </section>
   </main>
+
+  <dialog id="empty-dialog">
+    <h3>No decklist</h3>
+    <p>You didn't provide a deck URL or a pasted list.<br>
+      Start with an empty deck and add cards one by one?</p>
+    <form method="dialog" class="dialog-buttons">
+      <button value="start" class="primary">Start empty deck</button>
+      <button value="cancel" class="primary secondary">Cancel</button>
+    </form>
+  </dialog>
+
+  <dialog id="edit-dialog">
+    <h3>Edit translated text</h3>
+    <div id="edit-fields"></div>
+    <form method="dialog" class="dialog-buttons">
+      <button value="save" class="primary">Save</button>
+      <button value="cancel" class="primary secondary">Cancel</button>
+    </form>
+  </dialog>
 
   <dialog id="dfc-dialog">
     <h3>Double-sided cards</h3>

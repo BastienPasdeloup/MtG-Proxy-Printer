@@ -35,6 +35,7 @@ const TWO_IMAGE_LAYOUTS = new Set([
 
 // State: list of {name, qty, section, status, faces: [dataURL], printedName}
 let cards = [];
+let emptyDeck = false; // "start empty and add cards one by one" mode
 let deckTitle = "";
 
 const $ = (id) => document.getElementById(id);
@@ -170,21 +171,27 @@ async function loadMtgTop8(url) {
   return parsed;
 }
 
+// Returns the combined deck (URL and/or pasted list — both load when both
+// are given), or null when neither input is filled.
 async function loadDecklist() {
   const url = $("deck-url").value.trim();
   const pasted = $("deck-text").value.trim();
 
+  let deck = null;
   if (url) {
-    if (/moxfield\.com/i.test(url)) return loadMoxfield(url);
-    if (/mtgtop8\.com/i.test(url)) return loadMtgTop8(url);
-    throw new Error("Unrecognized URL — please use a Moxfield or MTGTop8 deck URL");
+    if (/moxfield\.com/i.test(url)) deck = await loadMoxfield(url);
+    else if (/mtgtop8\.com/i.test(url)) deck = await loadMtgTop8(url);
+    else throw new Error("Unrecognized URL — please use a Moxfield or MTGTop8 deck URL");
   }
   if (pasted) {
     const parsed = parseDeckText(pasted);
-    if (parsed.entries.length === 0) throw new Error("Could not parse any card from the pasted text");
-    return parsed;
+    if (parsed.entries.length === 0 && !deck) {
+      throw new Error("Could not parse any card from the pasted text");
+    }
+    if (deck) deck.entries = deck.entries.concat(parsed.entries);
+    else deck = parsed;
   }
-  throw new Error("Please enter a decklist URL (or paste a decklist)");
+  return deck;
 }
 
 /* ------------------------------------------------------------
@@ -1624,6 +1631,18 @@ async function onLoadCards() {
   try {
     setStatus("Loading decklist…", 0.02);
     const deck = await loadDecklist();
+    if (!deck) {
+      // Nothing provided: offer to start an empty deck built card by card
+      hideStatus();
+      if (await askEmptyDeck()) {
+        deckTitle = "Custom deck";
+        currentLang = $("language").value;
+        emptyDeck = true;
+        renderGrid();
+      }
+      return;
+    }
+    emptyDeck = false;
     deckTitle = deck.title;
 
     let entries = deck.entries;
@@ -1719,7 +1738,7 @@ function renderGrid() {
   $("deck-name").textContent = deckTitle;
   $("deck-stats").textContent =
     `${totalCards} cards · ${totalSlots} proxies · ${pages} A4 page${pages > 1 ? "s" : ""}`;
-  $("deck-section").classList.toggle("hidden", cards.length === 0);
+  $("deck-section").classList.toggle("hidden", cards.length === 0 && !emptyDeck);
 }
 
 function updateBadge(badgeEl, card) {
@@ -1733,6 +1752,65 @@ function updateBadge(badgeEl, card) {
       ? "English text kept — click to translate"
       : `${badge.title} — click to keep the English text instead`;
   }
+}
+
+// Double-click on a translated card: edit its overlay texts in a dialog,
+// then repaint the faces with the edited content.
+async function openEditDialog(card, img, tile) {
+  if (!printNeedsOverlay(card) || !card.overlayTexts) return;
+  const engFaces = card.english.card_faces?.length ? card.english.card_faces : [card.english];
+  const wrap = $("edit-fields");
+  wrap.innerHTML = "";
+  const fields = card.overlayTexts.map((t, i) => {
+    const fs = document.createElement("fieldset");
+    if (card.overlayTexts.length > 1) {
+      const lg = document.createElement("legend");
+      lg.textContent = engFaces[i]?.name || `Face ${i + 1}`;
+      fs.appendChild(lg);
+    }
+    const mkField = (label, value, isArea) => {
+      const lab = document.createElement("label");
+      lab.textContent = label;
+      const el = document.createElement(isArea ? "textarea" : "input");
+      if (isArea) el.rows = 4; else el.type = "text";
+      el.value = value || "";
+      lab.appendChild(el);
+      fs.appendChild(lab);
+      return el;
+    };
+    const name = mkField("Name", t.name, false);
+    const type = mkField("Type line", t.type, false);
+    const text = mkField("Text — symbols in braces like {T}, {2}, {W} are drawn as icons", t.text, true);
+    wrap.appendChild(fs);
+    return { name, type, text };
+  });
+
+  const dlg = $("edit-dialog");
+  const saved = await new Promise((resolve) => {
+    dlg.addEventListener("close", () => resolve(dlg.returnValue === "save"), { once: true });
+    dlg.showModal();
+  });
+  if (!saved) return;
+
+  card.overlayTexts = card.overlayTexts.map((t, i) => ({
+    ...t,
+    name: fields[i].name.value.trim() || null,
+    type: fields[i].type.value.trim() || null,
+    text: fields[i].text.value.trim() || null,
+  }));
+  img.style.opacity = "0.4";
+  try {
+    card.faces = await buildFaces(card);
+    img.src = card.faces[0];
+    const n0 = card.overlayTexts[0]?.name, n1 = card.overlayTexts[1]?.name;
+    card.printedName = n0 && n1 ? `${n0} // ${n1}` : (n0 || card.printedName);
+    const nameDiv = tile.querySelector(".card-name");
+    if (nameDiv) nameDiv.textContent = card.printedName;
+  } catch (e) {
+    console.error(e);
+    setStatus(`Could not update ${card.name}: ${e.message}`, null, true);
+  }
+  img.style.opacity = "";
 }
 
 function makeTile(card) {
@@ -1768,6 +1846,10 @@ function makeTile(card) {
   img.src = card.faces[0];
   img.alt = card.name;
   img.loading = "lazy";
+  img.addEventListener("dblclick", () => openEditDialog(card, img, tile));
+  if (printTranslatable(card)) {
+    img.title = "Double-click to edit the translated text";
+  }
   imgWrap.appendChild(img);
   if (card.faces.length > 1) {
     let face = 0;
@@ -1776,7 +1858,9 @@ function makeTile(card) {
       img.src = card.faces[face];
     };
     img.style.cursor = "pointer";
-    img.title = "Click to flip";
+    img.title = printTranslatable(card)
+      ? "Click to flip · double-click to edit the translated text"
+      : "Click to flip";
     img.addEventListener("click", flip);
     const flipBtn = document.createElement("button");
     flipBtn.className = "flip-btn";
@@ -2013,6 +2097,15 @@ async function rotateToPortrait(dataUrl) {
 }
 
 // Ask whether double-sided cards should print both faces or only the front.
+// No decklist given: propose starting an empty deck (cards added via "+").
+function askEmptyDeck() {
+  return new Promise((resolve) => {
+    const dlg = $("empty-dialog");
+    dlg.addEventListener("close", () => resolve(dlg.returnValue === "start"), { once: true });
+    dlg.showModal();
+  });
+}
+
 function askDfcChoice(count) {
   return new Promise((resolve) => {
     const dlg = $("dfc-dialog");
