@@ -727,7 +727,9 @@ async function resolveTranslations(englishCard, lang, loc) {
         // take the official subtype word, not machine translation.
         const sub = /\bToken\b/.test(face.type_line || "") && !face.name.includes(" ")
           ? SUBTYPE_DICT[lang]?.[face.name.toLowerCase()] : null;
-        if (sub) {
+        if (HELPER_NAMES[face.name]?.[lang]) {
+          t.name = HELPER_NAMES[face.name][lang];
+        } else if (sub) {
           t.name = sub.charAt(0).toUpperCase() + sub.slice(1);
         } else if (/\bDungeon\b/.test(face.type_line || "")) {
           t.name = face.name; // dungeon names are proper nouns
@@ -1172,6 +1174,15 @@ function drawTokenOverlay(bitmap, tr, hasPT, textless = false) {
 // each card — every known helper has its own calibrated regions (fractions
 // of the card height, calibrated on the newest printing, which is the one
 // selected by default). `box: null` = full-art helper, name bar only.
+// Official localized names for the game-aid helpers — fixed game
+// vocabulary, so machine translation (which can drift) is never used.
+const HELPER_NAMES = {
+  "City's Blessing": { fr: "La bénédiction de la cité" },
+  "The Monarch": { fr: "Le monarque" },
+  "The Initiative": { fr: "L'initiative" },
+  "Energy Reserve": { fr: "Réserve d'énergie" },
+};
+
 const HELPER_GEOM = {
   "The Monarch":         { bar: [0.569, 0.621], box: [0.628, 0.922] },
   "City's Blessing":     { bar: [0.680, 0.732], box: null }, // flavor only: kept as printed
@@ -1758,13 +1769,26 @@ function updateBadge(badgeEl, card) {
 async function openEditDialog(card, img, tile) {
   if (!printNeedsOverlay(card) || !card.overlayTexts) return;
   const engFaces = card.english.card_faces?.length ? card.english.card_faces : [card.english];
+  const isEmblem = card.english.layout === "emblem";
   const wrap = $("edit-fields");
   wrap.innerHTML = "";
   const fields = card.overlayTexts.map((t, i) => {
+    const engFace = engFaces[i] || card.english;
+    // Offer only the fields the overlay actually paints on this face
+    if (!overlayableFace(engFace)) return null; // dungeon map: nothing painted
+    const isHelper = /^Card\b/.test(engFace.type_line || "");
+    const geom = HELPER_GEOM[engFace.name];
+    const showName = !isEmblem; // emblems keep the planeswalker's name
+    const showType = !isHelper; // helper panels have no type line
+    const showText = isHelper
+      ? !!(geom?.box && engFace.oracle_text)
+      : !!(t.text || engFace.oracle_text); // e.g. no text field on vanilla tokens
+    if (!showName && !showType && !showText) return null;
+
     const fs = document.createElement("fieldset");
     if (card.overlayTexts.length > 1) {
       const lg = document.createElement("legend");
-      lg.textContent = engFaces[i]?.name || `Face ${i + 1}`;
+      lg.textContent = engFace.name || `Face ${i + 1}`;
       fs.appendChild(lg);
     }
     const mkField = (label, value, isArea) => {
@@ -1777,12 +1801,15 @@ async function openEditDialog(card, img, tile) {
       fs.appendChild(lab);
       return el;
     };
-    const name = mkField("Name", t.name, false);
-    const type = mkField("Type line", t.type, false);
-    const text = mkField("Text — symbols in braces like {T}, {2}, {W} are drawn as icons", t.text, true);
+    const name = showName ? mkField("Name", t.name, false) : null;
+    const type = showType ? mkField("Type line", t.type, false) : null;
+    const text = showText
+      ? mkField("Text — symbols in braces like {T}, {2}, {W} are drawn as icons", t.text, true)
+      : null;
     wrap.appendChild(fs);
     return { name, type, text };
   });
+  if (fields.every((f) => !f)) return;
 
   const dlg = $("edit-dialog");
   const saved = await new Promise((resolve) => {
@@ -1791,12 +1818,16 @@ async function openEditDialog(card, img, tile) {
   });
   if (!saved) return;
 
-  card.overlayTexts = card.overlayTexts.map((t, i) => ({
-    ...t,
-    name: fields[i].name.value.trim() || null,
-    type: fields[i].type.value.trim() || null,
-    text: fields[i].text.value.trim() || null,
-  }));
+  card.overlayTexts = card.overlayTexts.map((t, i) => {
+    const f = fields[i];
+    if (!f) return t;
+    return {
+      ...t,
+      name: f.name ? (f.name.value.trim() || null) : t.name,
+      type: f.type ? (f.type.value.trim() || null) : t.type,
+      text: f.text ? (f.text.value.trim() || null) : t.text,
+    };
+  });
   img.style.opacity = "0.4";
   try {
     card.faces = await buildFaces(card);
@@ -1848,20 +1879,19 @@ function makeTile(card) {
   img.loading = "lazy";
   imgWrap.appendChild(img);
 
-  // Hand button (bottom right): edit the translated text — shown only
-  // while the card displays a translation overlay.
-  const editBtn = document.createElement("button");
-  editBtn.className = "edit-btn";
-  editBtn.title = "Edit the translated text";
-  editBtn.innerHTML =
-    '<svg viewBox="0 0 24 24"><path d="M9 11.24V7.5a2.5 2.5 0 0 1 5 0v3.74c1.21-.81 2-2.18 2-3.74C16 5.01 13.99 3 11.5 3S7 5.01 7 7.5c0 1.56.79 2.93 2 3.74zm9.84 4.63l-4.54-2.26c-.17-.07-.35-.11-.54-.11H13v-6a1.5 1.5 0 0 0-3 0v10.74l-3.44-.72c-.37-.08-.76.04-1.03.31-.43.44-.43 1.14 0 1.58l4.79 4.79c.28.28.66.44 1.06.44h6.87c.75 0 1.38-.55 1.48-1.29l.75-5.27c.11-.8-.31-1.56-1.04-1.9z"/></svg>';
-  editBtn.addEventListener("click", () => openEditDialog(card, img, tile));
-  imgWrap.appendChild(editBtn);
-  const updateEditBtn = () =>
-    editBtn.classList.toggle("hidden", !printNeedsOverlay(card));
+  // Cards showing a translation overlay are editable: pencil cursor on
+  // hover, single click opens the edit dialog.
+  const updateEditBtn = () => {
+    const editable = printNeedsOverlay(card);
+    img.classList.toggle("editable", editable);
+    img.title = editable ? "Click to edit the translated text" : "";
+  };
+  img.addEventListener("click", () => {
+    if (printNeedsOverlay(card)) openEditDialog(card, img, tile);
+  });
   updateEditBtn();
 
-  // Flipping a double-sided card happens only via its icon (bottom left)
+  // Flipping a double-sided card happens only via its icon (bottom right)
   if (card.faces.length > 1) {
     let face = 0;
     const flipBtn = document.createElement("button");
