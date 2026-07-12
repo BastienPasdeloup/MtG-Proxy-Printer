@@ -36,7 +36,10 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
 Every card ends up in the chosen language:
 
 - If the card exists in the chosen language, a scan of a real printing is used, preferring
-  classic-frame versions over promos/showcase/Universes Beyond (green ✓ badge).
+  classic-frame versions over promos/showcase/Universes Beyond (green ✓ badge). Scans are
+  verified: when Scryfall wrongly attached the English image to a localized print (it happens),
+  the app detects it by comparing the text box with the English scan pixel-wise and applies
+  the translation overlay instead.
 - Otherwise the English scan is used and its **name, type line and text box** are repainted with the
   translation, resolved in this order:
   1. official printed text from Scryfall's localized print data (blue **T** badge),

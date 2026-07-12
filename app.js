@@ -709,7 +709,8 @@ const SUBTYPE_DICT = {
     gargoyle: "gargouille", illusion: "illusion", avatar: "avatar",
     sliver: "slivoïde", eldrazi: "eldrazi", faerie: "fée", satyr: "satyre",
     knight: "chevalier", warrior: "guerrier", wizard: "sorcier",
-    cleric: "clerc", rogue: "gredin", monk: "moine", shaman: "shamane",
+    sorcerer: "ensorceleur", cleric: "clerc", rogue: "gredin",
+    monk: "moine", shaman: "shamane",
     ninja: "ninja", samurai: "samouraï", pirate: "pirate",
     beast: "bête", bird: "oiseau", cat: "chat", dog: "chien", wolf: "loup",
     bear: "ours", boar: "sanglier", elephant: "éléphant", horse: "cheval",
@@ -1524,7 +1525,7 @@ function overlayableFace(face) {
 function printTranslatable(entry) {
   const print = entry.prints[entry.printIndex];
   const faces = entry.english.card_faces?.length ? entry.english.card_faces : [entry.english];
-  return entry.lang !== "en" && print.lang !== entry.lang &&
+  return entry.lang !== "en" && (print.lang !== entry.lang || print._badScan) &&
     OVERLAY_LAYOUTS.has(entry.english.layout) && faces.some(overlayableFace);
 }
 
@@ -1534,7 +1535,7 @@ function printNeedsOverlay(entry) {
 
 function computeStatus(entry) {
   const print = entry.prints[entry.printIndex];
-  if (entry.lang === "en" || print.lang === entry.lang) return "localized";
+  if (entry.lang === "en" || (print.lang === entry.lang && !print._badScan)) return "localized";
   if (entry.forceEnglish) return "english";
   if (entry.overlayTexts) return entry.usedMT ? "mt" : "overlay";
   return "english";
@@ -1543,11 +1544,59 @@ function computeStatus(entry) {
 // Render the faces of the currently selected printing (also used when the
 // user picks another printing from the dropdown). Translations are resolved
 // lazily, the first time an English print needs the overlay.
+// Scryfall sometimes attaches the English scan to a localized print (e.g.
+// several ECL French cards): compare the text-box region of the localized
+// scan with the English scan of the same printing — near-identical pixels
+// mean the "localized" image is really English (mean luminance difference
+// ≈ 0, while genuinely translated scans measure ≥ ~25).
+function textRegionDiff(bmpA, bmpB) {
+  const W = 64, H = 48;
+  const sample = (bmp) => {
+    const c = document.createElement("canvas");
+    c.width = W; c.height = H;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(bmp,
+      0.10 * bmp.width, 0.62 * bmp.height, 0.80 * bmp.width, 0.28 * bmp.height,
+      0, 0, W, H);
+    return ctx.getImageData(0, 0, W, H).data;
+  };
+  const da = sample(bmpA), db = sample(bmpB);
+  let sum = 0;
+  for (let i = 0; i < da.length; i += 4) {
+    const la = 0.299 * da[i] + 0.587 * da[i + 1] + 0.114 * da[i + 2];
+    const lb = 0.299 * db[i] + 0.587 * db[i + 1] + 0.114 * db[i + 2];
+    sum += Math.abs(la - lb);
+  }
+  return sum / (W * H);
+}
+
+async function isEnglishScan(entry, print) {
+  try {
+    const eng = entry.prints.find((p) => p.lang === "en" &&
+      p.set === print.set && p.collector_number === print.collector_number);
+    if (!eng) return false;
+    const urlA = faceImageUrls(print)[0], urlB = faceImageUrls(eng)[0];
+    if (!urlA || !urlB) return false;
+    const [a, b] = await Promise.all([loadImage(urlA), loadImage(urlB)]);
+    const d = textRegionDiff(a, b);
+    a.close?.(); b.close?.();
+    return d < 8;
+  } catch {
+    return false; // if in doubt, trust the scan
+  }
+}
+
 async function buildFaces(entry) {
   const print = entry.prints[entry.printIndex];
   const urls = faceImageUrls(print);
   if (urls.length === 0) throw new Error(`No image available for ${print.name}`);
   const printFaces = print.card_faces?.length ? print.card_faces : [print];
+
+  // Verify (once per print) that a localized scan really is localized
+  if (entry.lang !== "en" && print.lang === entry.lang &&
+      print._badScan === undefined && OVERLAY_LAYOUTS.has(entry.english.layout)) {
+    print._badScan = await isEnglishScan(entry, print);
+  }
 
   const needsOverlay = printNeedsOverlay(entry);
   if (needsOverlay && !entry.overlayTexts) {
