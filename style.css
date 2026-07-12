@@ -29,6 +29,40 @@ header {
   padding: 2rem 1rem 1rem;
 }
 
+#gh-star {
+  position: fixed;
+  top: 0.85rem;
+  right: 0.85rem;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.4rem 0.7rem;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  text-decoration: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+#gh-star:hover {
+  background: var(--panel);
+  border-color: var(--accent);
+  transform: translateY(-1px);
+}
+#gh-star svg {
+  width: 16px;
+  height: 16px;
+  fill: var(--accent);
+}
+@media (max-width: 560px) {
+  #gh-star span { display: none; }
+  #gh-star { padding: 0.45rem; }
+}
+
 header h1 {
   margin: 0;
   font-size: 2rem;
