@@ -480,6 +480,77 @@ const MTG_GLOSSARY = {
     'Creature types: goblin = gobelin (NEVER "gobelins" for the type), ' +
     "elf = elfe, dwarf = nain, wizard = sorcier, rogue = gredin, " +
     "wurm = guivre, drake = drakôn.",
+  de: "Official German MTG vocabulary (use these exact terms): " +
+    "land = Land, tap = tappen, untap = enttappen, tapped = getappt, " +
+    "target creature = Kreatur deiner Wahl, battlefield = Schlachtfeld, " +
+    "enters = kommt aufs Schlachtfeld, graveyard = Friedhof, " +
+    "library = Bibliothek, hand = Hand, exile = ins Exil schicken, " +
+    "cast = wirken, spell = Zauberspruch, ability = Fähigkeit, " +
+    "counter target spell = neutralisiere den Zauberspruch deiner Wahl, " +
+    "deals N damage = fügt N Schadenspunkte zu (damage = Schadenspunkte), " +
+    "draw a card = ziehe eine Karte, discard = abwerfen, " +
+    "sacrifice = opfern, destroy = zerstören, token = Spielstein, " +
+    "creature = Kreatur, sorcery = Hexerei, instant = Spontanzauber, " +
+    "enchantment = Verzauberung, artifact = Artefakt, " +
+    "upkeep = Versorgungssegment, end step = Endsegment, " +
+    "gain N life = erhältst N Lebenspunkte dazu, opponent = Gegner, " +
+    "+1/+1 counter = +1/+1-Marke, controller = Beherrscher.",
+  es: "Official Spanish MTG vocabulary (use these exact terms): " +
+    "land = tierra, tap = girar, untap = enderezar, tapped = girada, " +
+    "target creature = la criatura objetivo, " +
+    "battlefield = campo de batalla, graveyard = cementerio, " +
+    "library = biblioteca, hand = mano, exile = exiliar, " +
+    "cast = lanzar, spell = hechizo, ability = habilidad, " +
+    "counter target spell = contrarresta el hechizo objetivo, " +
+    "deals N damage = hace N puntos de daño, " +
+    "draw a card = roba una carta, discard = descartar, " +
+    "sacrifice = sacrificar, destroy = destruir, token = ficha, " +
+    "creature = criatura, sorcery = conjuro, instant = instantáneo, " +
+    "enchantment = encantamiento, artifact = artefacto, " +
+    "upkeep = mantenimiento, end step = paso final, " +
+    "gain N life = ganas N vidas, opponent = oponente, " +
+    "+1/+1 counter = contador +1/+1, controller = controlador.",
+  it: "Official Italian MTG vocabulary (use these exact terms): " +
+    "land = terra, tap = TAPpare, untap = STAPpare, tapped = TAPpata, " +
+    "target creature = la creatura bersaglio, " +
+    "battlefield = campo di battaglia, graveyard = cimitero, " +
+    "library = grimorio, hand = mano, exile = esiliare, " +
+    "cast = lanciare, spell = magia, ability = abilità, " +
+    "counter target spell = neutralizza una magia bersaglio, " +
+    "deals N damage = infligge N danni, draw a card = pesca una carta, " +
+    "discard = scartare, sacrifice = sacrificare, destroy = distruggere, " +
+    "token = pedina, creature = creatura, sorcery = stregoneria, " +
+    "instant = istantaneo, enchantment = incantesimo, " +
+    "artifact = artefatto, upkeep = mantenimento, " +
+    "end step = sottofase finale, gain N life = guadagni N punti vita, " +
+    "opponent = avversario, +1/+1 counter = segnalino +1/+1, " +
+    "controller = controllore.",
+  pt: "Official Portuguese MTG vocabulary (use these exact terms): " +
+    "land = terreno, tap = virar, untap = desvirar, tapped = virado, " +
+    "target creature = a criatura alvo, battlefield = campo de batalha, " +
+    "graveyard = cemitério, library = grimório, hand = mão, " +
+    "exile = exilar, cast = conjurar, spell = mágica, " +
+    "ability = habilidade, counter target spell = anule a mágica alvo, " +
+    "deals N damage = causa N pontos de dano, " +
+    "draw a card = compre um card, card = card, discard = descartar, " +
+    "sacrifice = sacrificar, destroy = destruir, token = ficha, " +
+    "creature = criatura, sorcery = feitiço, " +
+    "instant = mágica instantânea, enchantment = encantamento, " +
+    "artifact = artefato, upkeep = manutenção, end step = etapa final, " +
+    "gain N life = ganhe N pontos de vida, opponent = oponente, " +
+    "+1/+1 counter = marcador +1/+1, controller = controlador.",
+  ja: "Official Japanese MTG vocabulary (use these exact terms): " +
+    "land = 土地, tap = タップ, untap = アンタップ, target = 対象, " +
+    "battlefield = 戦場, graveyard = 墓地, library = ライブラリー, " +
+    "hand = 手札, exile = 追放, cast = 唱える, spell = 呪文, " +
+    "ability = 能力, counter target spell = 対象の呪文を打ち消す, " +
+    "deals N damage = N点のダメージを与える, draw a card = カードを1枚引く, " +
+    "discard = 捨てる, sacrifice = 生け贄に捧げる, destroy = 破壊する, " +
+    "token = トークン, creature = クリーチャー, sorcery = ソーサリー, " +
+    "instant = インスタント, enchantment = エンチャント, " +
+    "artifact = アーティファクト, upkeep = アップキープ, " +
+    "end step = 終了ステップ, gain N life = N点のライフを得る, " +
+    "opponent = 対戦相手, +1/+1 counter = +1/+1カウンター.",
 };
 
 async function aiTranslateImpl(text, lang) {
@@ -569,6 +640,9 @@ const TYPE_DICT = {
   },
   de: {
     "Emblem": "Emblem",
+    "Token Creature": "Spielstein-Kreatur", "Token Artifact": "Spielstein-Artefakt",
+    "Token Artifact Creature": "Spielstein-Artefaktkreatur",
+    "Token Legendary Creature": "Legendäre Spielstein-Kreatur",
     "Land": "Land", "Creature": "Kreatur", "Artifact": "Artefakt",
     "Enchantment": "Verzauberung", "Instant": "Spontanzauber", "Sorcery": "Hexerei",
     "Planeswalker": "Planeswalker", "Basic Land": "Standardland",
@@ -577,6 +651,9 @@ const TYPE_DICT = {
   },
   es: {
     "Emblem": "Emblema",
+    "Token Creature": "Ficha de criatura", "Token Artifact": "Ficha de artefacto",
+    "Token Artifact Creature": "Ficha de criatura artefacto",
+    "Token Legendary Creature": "Ficha de criatura legendaria",
     "Land": "Tierra", "Creature": "Criatura", "Artifact": "Artefacto",
     "Enchantment": "Encantamiento", "Instant": "Instantáneo", "Sorcery": "Conjuro",
     "Planeswalker": "Planeswalker", "Basic Land": "Tierra básica",
@@ -585,6 +662,9 @@ const TYPE_DICT = {
   },
   it: {
     "Emblem": "Emblema",
+    "Token Creature": "Pedina Creatura", "Token Artifact": "Pedina Artefatto",
+    "Token Artifact Creature": "Pedina Creatura Artefatto",
+    "Token Legendary Creature": "Pedina Creatura Leggendaria",
     "Land": "Terra", "Creature": "Creatura", "Artifact": "Artefatto",
     "Enchantment": "Incantesimo", "Instant": "Istantaneo", "Sorcery": "Stregoneria",
     "Planeswalker": "Planeswalker", "Basic Land": "Terra Base",
@@ -592,6 +672,9 @@ const TYPE_DICT = {
   },
   pt: {
     "Emblem": "Emblema",
+    "Token Creature": "Ficha de criatura", "Token Artifact": "Ficha de artefato",
+    "Token Artifact Creature": "Ficha de criatura artefato",
+    "Token Legendary Creature": "Ficha de criatura lendária",
     "Land": "Terreno", "Creature": "Criatura", "Artifact": "Artefato",
     "Enchantment": "Encantamento", "Instant": "Mágica Instantânea", "Sorcery": "Feitiço",
     "Planeswalker": "Planeswalker", "Basic Land": "Terreno Básico",
@@ -599,6 +682,8 @@ const TYPE_DICT = {
   },
   ja: {
     "Emblem": "紋章",
+    "Token Creature": "トークン・クリーチャー", "Token Artifact": "トークン・アーティファクト",
+    "Token Artifact Creature": "トークン・アーティファクト・クリーチャー",
     "Land": "土地", "Creature": "クリーチャー", "Artifact": "アーティファクト",
     "Enchantment": "エンチャント", "Instant": "インスタント", "Sorcery": "ソーサリー",
     "Planeswalker": "プレインズウォーカー", "Basic Land": "基本土地",
@@ -637,7 +722,90 @@ const SUBTYPE_DICT = {
     treasure: "trésor", clue: "indice", food: "nourriture",
     blood: "sang", gold: "or", map: "carte", powerstone: "pierre de puissance",
   },
+  de: {
+    goblin: "Goblin", soldier: "Soldat", zombie: "Zombie", spirit: "Geist",
+    elf: "Elf", dwarf: "Zwerg", giant: "Riese", ogre: "Oger", troll: "Troll",
+    human: "Mensch", knight: "Ritter", warrior: "Krieger", wizard: "Zauberer",
+    cleric: "Kleriker", skeleton: "Skelett", vampire: "Vampir",
+    angel: "Engel", demon: "Dämon", dragon: "Drache", hydra: "Hydra",
+    sphinx: "Sphinx", phoenix: "Phönix", unicorn: "Einhorn", wurm: "Wurm",
+    elemental: "Elementarwesen", golem: "Golem",
+    beast: "Bestie", bird: "Vogel", cat: "Katze", dog: "Hund", wolf: "Wolf",
+    bear: "Bär", boar: "Eber", elephant: "Elefant", horse: "Pferd",
+    goat: "Ziege", snake: "Schlange", insect: "Insekt", rat: "Ratte",
+    mouse: "Maus", squirrel: "Eichhörnchen", spider: "Spinne", fish: "Fisch",
+    frog: "Frosch", plant: "Pflanze", wall: "Mauer", saproling: "Saproling",
+    treasure: "Schatz", clue: "Hinweis", food: "Nahrung", blood: "Blut",
+    gold: "Gold", map: "Karte",
+  },
+  es: {
+    goblin: "Trasgo", soldier: "Soldado", zombie: "Zombie", spirit: "Espíritu",
+    elf: "Elfo", dwarf: "Enano", giant: "Gigante", ogre: "Ogro", troll: "Trol",
+    human: "Humano", knight: "Caballero", warrior: "Guerrero",
+    wizard: "Hechicero", cleric: "Clérigo", skeleton: "Esqueleto",
+    vampire: "Vampiro", angel: "Ángel", demon: "Demonio", dragon: "Dragón",
+    hydra: "Hidra", sphinx: "Esfinge", phoenix: "Fénix", unicorn: "Unicornio",
+    wurm: "Sierpe", elemental: "Elemental", golem: "Gólem",
+    beast: "Bestia", bird: "Ave", cat: "Felino", dog: "Perro", wolf: "Lobo",
+    bear: "Oso", elephant: "Elefante", horse: "Caballo", goat: "Cabra",
+    snake: "Serpiente", insect: "Insecto", rat: "Rata", mouse: "Ratón",
+    squirrel: "Ardilla", spider: "Araña", fish: "Pez", frog: "Rana",
+    plant: "Planta", wall: "Muro",
+    treasure: "Tesoro", clue: "Pista", food: "Comida", blood: "Sangre",
+    gold: "Oro", map: "Mapa",
+  },
+  it: {
+    goblin: "Goblin", soldier: "Soldato", zombie: "Zombie", spirit: "Spirito",
+    elf: "Elfo", dwarf: "Nano", giant: "Gigante", ogre: "Ogre", troll: "Troll",
+    human: "Umano", knight: "Cavaliere", warrior: "Guerriero", wizard: "Mago",
+    cleric: "Chierico", skeleton: "Scheletro", vampire: "Vampiro",
+    angel: "Angelo", demon: "Demone", dragon: "Drago", hydra: "Idra",
+    sphinx: "Sfinge", phoenix: "Fenice", unicorn: "Unicorno",
+    elemental: "Elementale", golem: "Golem",
+    beast: "Bestia", bird: "Uccello", cat: "Felino", dog: "Cane",
+    wolf: "Lupo", bear: "Orso", elephant: "Elefante", horse: "Cavallo",
+    goat: "Capra", snake: "Serpente", insect: "Insetto", rat: "Ratto",
+    mouse: "Topo", squirrel: "Scoiattolo", spider: "Ragno", fish: "Pesce",
+    frog: "Rana", plant: "Pianta", wall: "Muro",
+    treasure: "Tesoro", clue: "Indizio", food: "Cibo", blood: "Sangue",
+    gold: "Oro", map: "Mappa",
+  },
+  pt: {
+    goblin: "Goblin", soldier: "Soldado", zombie: "Zumbi", spirit: "Espírito",
+    elf: "Elfo", dwarf: "Anão", giant: "Gigante", ogre: "Ogro", troll: "Trol",
+    human: "Humano", knight: "Cavaleiro", warrior: "Guerreiro", wizard: "Mago",
+    cleric: "Clérigo", skeleton: "Esqueleto", vampire: "Vampiro",
+    angel: "Anjo", demon: "Demônio", dragon: "Dragão", hydra: "Hidra",
+    sphinx: "Esfinge", phoenix: "Fênix", unicorn: "Unicórnio",
+    elemental: "Elemental", golem: "Golem",
+    beast: "Fera", bird: "Ave", cat: "Felino", dog: "Cão", wolf: "Lobo",
+    bear: "Urso", elephant: "Elefante", horse: "Cavalo", goat: "Cabra",
+    snake: "Serpente", insect: "Inseto", rat: "Rato",
+    squirrel: "Esquilo", spider: "Aranha", fish: "Peixe", frog: "Rã",
+    plant: "Planta", wall: "Muro",
+    treasure: "Tesouro", clue: "Pista", food: "Comida", blood: "Sangue",
+    gold: "Ouro", map: "Mapa",
+  },
+  ja: {
+    goblin: "ゴブリン", soldier: "兵士", zombie: "ゾンビ", spirit: "スピリット",
+    elf: "エルフ", dwarf: "ドワーフ", giant: "巨人", ogre: "オーガ", troll: "トロール",
+    human: "人間", knight: "騎士", warrior: "戦士", wizard: "ウィザード",
+    cleric: "クレリック", skeleton: "スケルトン", vampire: "吸血鬼",
+    angel: "天使", demon: "デーモン", dragon: "ドラゴン", hydra: "ハイドラ",
+    sphinx: "スフィンクス", phoenix: "フェニックス", unicorn: "ユニコーン",
+    elemental: "エレメンタル", golem: "ゴーレム",
+    beast: "ビースト", bird: "鳥", cat: "猫", dog: "犬", wolf: "狼",
+    bear: "熊", elephant: "象", horse: "馬", snake: "蛇", insect: "昆虫",
+    rat: "ネズミ", squirrel: "リス", spider: "蜘蛛", fish: "魚",
+    plant: "植物", wall: "壁",
+    treasure: "宝物", clue: "手掛かり", food: "食物", blood: "血",
+    gold: "金", map: "地図",
+  },
 };
+
+// Separator between translated subtypes ("Mouse Soldier"): French joins
+// with "et", Japanese with the middle dot, other languages with a space.
+const SUBTYPE_JOIN = { fr: " et ", ja: "・" };
 
 async function translateTypeLine(typeLine, lang) {
   const [types, subtypes] = typeLine.split(/\s+—\s+/);
@@ -647,7 +815,7 @@ async function translateTypeLine(typeLine, lang) {
   const dict = SUBTYPE_DICT[lang];
   const words = subtypes.split(/\s+/);
   if (dict && words.every((w) => dict[w.toLowerCase()])) {
-    const sub = words.map((w) => dict[w.toLowerCase()]).join(lang === "fr" ? " et " : " ");
+    const sub = words.map((w) => dict[w.toLowerCase()]).join(SUBTYPE_JOIN[lang] || " ");
     return { text: official + (TYPE_SEP[lang] || " — ") + sub, mt: false };
   }
   const sub = await machineTranslate(subtypes, lang);
@@ -665,6 +833,46 @@ const KEYWORD_DICT = {
     defender: "défenseur", flash: "flash", indestructible: "indestructible",
     hexproof: "défense talismanique", prowess: "prouesse", fear: "peur",
     shroud: "linceul", changeling: "changeforme",
+  },
+  de: {
+    flying: "Fliegend", "first strike": "Erstschlag",
+    "double strike": "Doppelschlag", deathtouch: "Todesberührung",
+    trample: "Verursacht Trampelschaden", haste: "Eile",
+    vigilance: "Wachsamkeit", lifelink: "Lebensverknüpfung",
+    reach: "Reichweite", menace: "Bedrohlich", defender: "Verteidiger",
+    flash: "Aufblitzen", indestructible: "Unzerstörbar",
+    hexproof: "Fluchsicher", prowess: "Bravour", fear: "Furcht",
+  },
+  es: {
+    flying: "Vuela", "first strike": "Daña primero",
+    "double strike": "Daña dos veces", deathtouch: "Toque mortal",
+    trample: "Arrolla", haste: "Prisa", vigilance: "Vigilancia",
+    lifelink: "Vínculo vital", reach: "Alcance", menace: "Amenaza",
+    defender: "Defensor", flash: "Destello", indestructible: "Indestructible",
+    hexproof: "Antimaleficio", prowess: "Valentía", fear: "Miedo",
+  },
+  it: {
+    flying: "Volare", "first strike": "Attacco improvviso",
+    "double strike": "Doppio attacco", deathtouch: "Tocco letale",
+    trample: "Travolgere", haste: "Rapidità", vigilance: "Cautela",
+    lifelink: "Legame vitale", reach: "Raggiungere", menace: "Minacciare",
+    defender: "Difensore", flash: "Lampo", indestructible: "Indistruttibile",
+    prowess: "Prodezza", fear: "Paura",
+  },
+  pt: {
+    flying: "Voar", "first strike": "Iniciativa",
+    "double strike": "Golpe duplo", deathtouch: "Toque mortífero",
+    trample: "Atropelar", haste: "Ímpeto", vigilance: "Vigilância",
+    lifelink: "Vínculo com a vida", reach: "Alcance", menace: "Ameaçar",
+    defender: "Defensor", flash: "Lampejo", indestructible: "Indestrutível",
+    fear: "Medo",
+  },
+  ja: {
+    flying: "飛行", "first strike": "先制攻撃", "double strike": "二段攻撃",
+    deathtouch: "接死", trample: "トランプル", haste: "速攻",
+    vigilance: "警戒", lifelink: "絆魂", reach: "到達", menace: "威迫",
+    defender: "防衛", flash: "瞬速", indestructible: "破壊不能",
+    hexproof: "呪禁", prowess: "果敢",
   },
 };
 
@@ -894,12 +1102,24 @@ function atomize(paragraph) {
 }
 
 // Borderless parchment fill, for blanking leftover original text
+// While buildFaces paints a face, every parchment rectangle is logged here
+// (as width/height fractions) — the grid uses it to make exactly the
+// repainted areas clickable for manual text editing.
+let regionLog = null;
+function logRegion(ctx, x0, y0, x1, y1) {
+  if (!regionLog) return;
+  const W = ctx.canvas.width, H = ctx.canvas.height;
+  regionLog.push([x0 / W, y0 / H, x1 / W, y1 / H]);
+}
+
 function paintPatch(ctx, x0, y0, x1, y1) {
+  logRegion(ctx, x0, y0, x1, y1);
   ctx.fillStyle = "#f3eedf";
   ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
 }
 
 function paintParchment(ctx, W, x0, y0, x1, y1) {
+  logRegion(ctx, x0, y0, x1, y1);
   ctx.fillStyle = "#f3eedf"; // fully opaque or the English text ghosts through
   ctx.strokeStyle = "rgba(60, 50, 30, 0.65)";
   ctx.lineWidth = Math.max(1, 0.003 * W);
@@ -1177,10 +1397,17 @@ function drawTokenOverlay(bitmap, tr, hasPT, textless = false) {
 // Official localized names for the game-aid helpers — fixed game
 // vocabulary, so machine translation (which can drift) is never used.
 const HELPER_NAMES = {
-  "City's Blessing": { fr: "La bénédiction de la cité" },
-  "The Monarch": { fr: "Le monarque" },
-  "The Initiative": { fr: "L'initiative" },
-  "Energy Reserve": { fr: "Réserve d'énergie" },
+  "City's Blessing": { fr: "Agrément de la cité", de: "Segen der Stadt",
+    es: "El beneplácito de la ciudad", it: "Benedizione della città",
+    pt: "Bênção da cidade", ja: "都市の承認" },
+  "The Monarch": { fr: "Le monarque", de: "Der Monarch", es: "El monarca",
+    it: "Il monarca", pt: "O monarca", ja: "統治者" },
+  "The Initiative": { fr: "L'initiative", de: "Die Initiative",
+    es: "La iniciativa", it: "L'iniziativa", pt: "A iniciativa",
+    ja: "イニシアチブ" },
+  "Energy Reserve": { fr: "Réserve d'énergie", de: "Energiereserve",
+    es: "Reserva de energía", it: "Riserva di energia",
+    pt: "Reserva de energia" },
 };
 
 const HELPER_GEOM = {
@@ -1329,6 +1556,7 @@ async function buildFaces(entry) {
     entry.usedMT = usedMT;
   }
   if (needsOverlay) await preloadSymbols(entry.overlayTexts);
+  entry.editRegions = []; // per face, filled while painting (see logRegion)
 
   // Split cards: rotate the scan 90° clockwise so both halves read
   // horizontally (displayed landscape; rotated back at PDF time).
@@ -1345,8 +1573,11 @@ async function buildFaces(entry) {
     ctx.restore();
     bitmap.close?.();
     if (needsOverlay && entry.overlayTexts) {
+      regionLog = [];
       drawSplitOverlay(ctx, canvas.width, canvas.height, entry.overlayTexts,
         entry.english.card_faces || [], print.frame);
+      entry.editRegions = [regionLog];
+      regionLog = null;
     }
     return [canvas.toDataURL("image/jpeg", 0.92)];
   }
@@ -1357,7 +1588,10 @@ async function buildFaces(entry) {
     await preloadSymbols([{ text: engFaces[1]?.mana_cost || "" }]);
     const bitmap = await loadImage(urls[0]);
     const hasPT = engFaces[0]?.power != null;
+    regionLog = [];
     const face = drawAdventureOverlay(bitmap, entry.overlayTexts, engFaces, hasPT);
+    entry.editRegions = [regionLog];
+    regionLog = null;
     bitmap.close?.();
     return [face];
   }
@@ -1367,6 +1601,7 @@ async function buildFaces(entry) {
   for (let i = 0; i < urls.length; i++) {
     const bitmap = await loadImage(urls[i]);
     const tr = needsOverlay ? entry.overlayTexts?.[i] : null;
+    regionLog = [];
     if (tr && (tr.name || tr.type || tr.text)) {
       const mana = (printFaces[i]?.mana_cost || "").match(/{[^}]+}/g)?.length || 0;
       const hasPT = engFaces[i]?.power != null;
@@ -1378,10 +1613,7 @@ async function buildFaces(entry) {
         } else if (geom) {
           faces.push(drawHelperOverlay(bitmap, tr, geom));
         } else {
-          // Emblems keep their title untouched: the bar shows the
-          // planeswalker's name, a proper noun that isn't translated.
-          const trTok = entry.english.layout === "emblem" ? { ...tr, name: null } : tr;
-          faces.push(drawTokenOverlay(bitmap, trTok, hasPT, !engFace.oracle_text));
+          faces.push(drawTokenOverlay(bitmap, tr, hasPT, !engFace.oracle_text));
         }
       } else {
         faces.push(drawWithOverlay(bitmap, tr, mana, hasPT));
@@ -1389,6 +1621,8 @@ async function buildFaces(entry) {
     } else {
       faces.push(bitmapToDataUrl(bitmap));
     }
+    entry.editRegions.push(regionLog);
+    regionLog = null;
     bitmap.close?.();
   }
   return faces;
@@ -1767,9 +2001,8 @@ function updateBadge(badgeEl, card) {
 // Double-click on a translated card: edit its overlay texts in a dialog,
 // then repaint the faces with the edited content.
 async function openEditDialog(card, img, tile) {
-  if (!printNeedsOverlay(card) || !card.overlayTexts) return;
+  if (!printNeedsOverlay(card) || !card.overlayTexts) return false;
   const engFaces = card.english.card_faces?.length ? card.english.card_faces : [card.english];
-  const isEmblem = card.english.layout === "emblem";
   const wrap = $("edit-fields");
   wrap.innerHTML = "";
   const fields = card.overlayTexts.map((t, i) => {
@@ -1778,7 +2011,7 @@ async function openEditDialog(card, img, tile) {
     if (!overlayableFace(engFace)) return null; // dungeon map: nothing painted
     const isHelper = /^Card\b/.test(engFace.type_line || "");
     const geom = HELPER_GEOM[engFace.name];
-    const showName = !isEmblem; // emblems keep the planeswalker's name
+    const showName = true;
     const showType = !isHelper; // helper panels have no type line
     const showText = isHelper
       ? !!(geom?.box && engFace.oracle_text)
@@ -1809,14 +2042,14 @@ async function openEditDialog(card, img, tile) {
     wrap.appendChild(fs);
     return { name, type, text };
   });
-  if (fields.every((f) => !f)) return;
+  if (fields.every((f) => !f)) return false;
 
   const dlg = $("edit-dialog");
   const saved = await new Promise((resolve) => {
     dlg.addEventListener("close", () => resolve(dlg.returnValue === "save"), { once: true });
     dlg.showModal();
   });
-  if (!saved) return;
+  if (!saved) return false;
 
   card.overlayTexts = card.overlayTexts.map((t, i) => {
     const f = fields[i];
@@ -1841,6 +2074,7 @@ async function openEditDialog(card, img, tile) {
     setStatus(`Could not update ${card.name}: ${e.message}`, null, true);
   }
   img.style.opacity = "";
+  return true;
 }
 
 function makeTile(card) {
@@ -1859,7 +2093,7 @@ function makeTile(card) {
       img.src = card.faces[0];
       card.status = computeStatus(card);
       updateBadge(badgeEl, card);
-      updateEditBtn();
+      face = 0;
     } catch (e) {
       console.error(e);
       setStatus(`Could not update ${card.name}: ${e.message}`, null, true);
@@ -1879,21 +2113,28 @@ function makeTile(card) {
   img.loading = "lazy";
   imgWrap.appendChild(img);
 
-  // Cards showing a translation overlay are editable: pencil cursor on
-  // hover, single click opens the edit dialog.
-  const updateEditBtn = () => {
-    const editable = printNeedsOverlay(card);
-    img.classList.toggle("editable", editable);
-    img.title = editable ? "Click to edit the translated text" : "";
+  // The repainted (parchment) areas are clickable to edit the translation:
+  // pointer cursor when hovering one, click opens the dialog.
+  let face = 0; // face currently displayed (flip button below)
+  const hitRegion = (e) => {
+    if (!printNeedsOverlay(card)) return false;
+    const r = img.getBoundingClientRect();
+    const fx = (e.clientX - r.left) / r.width;
+    const fy = (e.clientY - r.top) / r.height;
+    return (card.editRegions?.[face] || []).some(([x0, y0, x1, y1]) =>
+      fx >= x0 && fx <= x1 && fy >= y0 && fy <= y1);
   };
-  img.addEventListener("click", () => {
-    if (printNeedsOverlay(card)) openEditDialog(card, img, tile);
+  img.addEventListener("mousemove", (e) => {
+    const hit = hitRegion(e);
+    img.style.cursor = hit ? "pointer" : "";
+    img.title = hit ? "Click to edit the translated text" : "";
   });
-  updateEditBtn();
+  img.addEventListener("click", async (e) => {
+    if (hitRegion(e) && await openEditDialog(card, img, tile)) face = 0;
+  });
 
-  // Flipping a double-sided card happens only via its icon (bottom right)
+  // Flipping a double-sided card happens only via its icon (below the badge)
   if (card.faces.length > 1) {
-    let face = 0;
     const flipBtn = document.createElement("button");
     flipBtn.className = "flip-btn";
     flipBtn.title = "Show the other side";
@@ -1929,7 +2170,7 @@ function makeTile(card) {
         img.src = card.faces[0];
         card.status = computeStatus(card);
         updateBadge(badgeEl, card);
-        updateEditBtn();
+        face = 0;
       } catch (e) {
         console.error(e);
         setStatus(`Could not load that printing of ${card.name}: ${e.message}`, null, true);

@@ -142,10 +142,11 @@ button.primary.big { padding: 0.8rem 2.2rem; font-size: 1.1rem; }
 .card-tile.wide .badge { top: 3rem; right: calc(5.5% + 0.9rem); }
 
 .img-wrap { position: relative; }
+/* flip button sits just below the badge */
 .flip-btn {
   position: absolute;
-  bottom: 0.4rem;
-  right: 0.4rem;
+  top: 3.6rem;
+  right: 0.55rem;
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -161,12 +162,7 @@ button.primary.big { padding: 0.8rem 2.2rem; font-size: 1.1rem; }
 .flip-btn:hover { background: var(--accent); color: #1a1508; }
 .flip-btn svg { width: 20px; height: 20px; fill: currentColor; }
 /* keep the button on the (narrower, centered) landscape card */
-.card-tile.wide .flip-btn { right: calc(5.5% + 0.4rem); }
-
-/* translated cards are editable: pencil cursor, click to open the editor */
-.img-wrap img.editable {
-  cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22"><text y="17" font-size="15">✏️</text></svg>') 3 18, pointer;
-}
+.card-tile.wide .flip-btn { top: 3.9rem; right: calc(5.5% + 0.75rem); }
 
 .card-name {
   font-size: 0.8rem;
