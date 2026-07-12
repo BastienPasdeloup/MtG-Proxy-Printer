@@ -553,16 +553,22 @@ const MTG_GLOSSARY = {
     "opponent = 対戦相手, +1/+1 counter = +1/+1カウンター.",
 };
 
-async function aiTranslateImpl(text, lang) {
-  const system =
-    "You are an expert Magic: The Gathering card translator. Translate the " +
-    `English MTG card text given by the user into ${LANG_NAME[lang]}, using ` +
-    "EXACTLY the official game terminology printed on localized " +
-    `${LANG_NAME[lang]} MTG cards. ${MTG_GLOSSARY[lang] || ""} ` +
-    "Preserve line breaks and symbols in braces like {T}, {2}, {W/U} exactly. " +
-    'ALL-CAPS tokens like "CARDNAME" or "DUNGEONNAME0" are placeholders for ' +
-    "names: keep them EXACTLY as-is in your output, never drop or replace them. " +
-    "Output ONLY the translation, nothing else.";
+async function aiTranslateImpl(text, lang, opts = {}) {
+  const system = opts.isName
+    ? "You are an expert Magic: The Gathering translator. The user gives you " +
+      `the NAME (title) of a single MTG card. Translate ONLY that name into ` +
+      `${LANG_NAME[lang]}, matching the official localized ${LANG_NAME[lang]} ` +
+      "card name. It is a short title, NOT rules text: never output an ability, " +
+      "reminder text, mana cost or explanation — only the translated name, on " +
+      "one line, with nothing added."
+    : "You are an expert Magic: The Gathering card translator. Translate the " +
+      `English MTG card text given by the user into ${LANG_NAME[lang]}, using ` +
+      "EXACTLY the official game terminology printed on localized " +
+      `${LANG_NAME[lang]} MTG cards. ${MTG_GLOSSARY[lang] || ""} ` +
+      "Preserve line breaks and symbols in braces like {T}, {2}, {W/U} exactly. " +
+      'ALL-CAPS tokens like "CARDNAME" or "DUNGEONNAME0" are placeholders for ' +
+      "names: keep them EXACTLY as-is in your output, never drop or replace them. " +
+      "Output ONLY the translation, nothing else.";
   const resp = await fetchRetry("https://text.pollinations.ai/openai", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -579,8 +585,15 @@ async function aiTranslateImpl(text, lang) {
   let out = data?.choices?.[0]?.message?.content?.trim();
   if (!out) throw new Error("AI translator: empty result");
   out = out.replace(/^["«\s]+|["»\s]+$/g, "");
-  // Guard against the model chatting instead of translating
-  if (out.length > text.length * 4 + 200) throw new Error("AI translator: implausible output");
+  if (opts.isName) {
+    // A name must stay a short single line — reject the model spilling into
+    // rules text (a common failure on famous cards like Ancestral Recall).
+    if (out.includes("\n") || out.length > text.length * 2 + 20) {
+      throw new Error("AI translator: name looks like rules text");
+    }
+  } else if (out.length > text.length * 4 + 200) {
+    throw new Error("AI translator: implausible output"); // guard against chatting
+  }
   return out;
 }
 
@@ -891,13 +904,13 @@ function translateKeywordText(text, lang) {
 
 // Machine-translate with the provider chosen in the "Translator" dropdown,
 // falling back to the other providers if it fails.
-async function machineTranslate(text, lang) {
+async function machineTranslate(text, lang, opts = {}) {
   const selected = $("translator").value || "google";
   const order = [selected, ...Object.keys(MT_PROVIDERS).filter((k) => k !== selected)];
   let lastError = null;
   for (const key of order) {
     try {
-      const out = await MT_PROVIDERS[key].fn(text, lang);
+      const out = await MT_PROVIDERS[key].fn(text, lang, opts);
       // Some providers emit the two characters "\n" instead of a newline
       return out.replace(/\\n/g, "\n");
     } catch (e) {
@@ -966,7 +979,7 @@ async function resolveTranslations(englishCard, lang, loc) {
         } else if (/\bDungeon\b/.test(face.type_line || "")) {
           t.name = face.name; // dungeon names are proper nouns
         } else {
-          t.name = await machineTranslate(face.name, lang);
+          t.name = await machineTranslate(face.name, lang, { isName: true });
           usedMT = true;
         }
       }
@@ -1568,18 +1581,20 @@ function computeStatus(entry) {
 // user picks another printing from the dropdown). Translations are resolved
 // lazily, the first time an English print needs the overlay.
 // Scryfall sometimes attaches the English scan to a localized print (e.g.
-// several ECL French cards): compare the text-box region of the localized
-// scan with the English scan of the same printing — near-identical pixels
-// mean the "localized" image is really English (mean luminance difference
-// ≈ 0, while genuinely translated scans measure ≥ ~25).
-function textRegionDiff(bmpA, bmpB) {
-  const W = 64, H = 48;
+// several ECL French cards). Detect it by comparing the localized scan with
+// the English scan of the SAME printing (same artwork): a wrongly-attached
+// image is pixel-identical, so both the name bar AND the text box match. We
+// require BOTH to match so a genuine localized scan whose text box happens
+// to look similar (e.g. a basic land, all art and no rules text) is not
+// flagged — its name bar still differs ("Île" vs "Island").
+function regionDiff(bmpA, bmpB, [rx, ry, rw, rh]) {
+  const W = 64, H = 32;
   const sample = (bmp) => {
     const c = document.createElement("canvas");
     c.width = W; c.height = H;
     const ctx = c.getContext("2d");
     ctx.drawImage(bmp,
-      0.10 * bmp.width, 0.62 * bmp.height, 0.80 * bmp.width, 0.28 * bmp.height,
+      rx * bmp.width, ry * bmp.height, rw * bmp.width, rh * bmp.height,
       0, 0, W, H);
     return ctx.getImageData(0, 0, W, H).data;
   };
@@ -1601,9 +1616,10 @@ async function isEnglishScan(entry, print) {
     const urlA = faceImageUrls(print)[0], urlB = faceImageUrls(eng)[0];
     if (!urlA || !urlB) return false;
     const [a, b] = await Promise.all([loadImage(urlA), loadImage(urlB)]);
-    const d = textRegionDiff(a, b);
+    const nameDiff = regionDiff(a, b, [0.08, 0.045, 0.62, 0.055]); // title bar (left of mana)
+    const textDiff = regionDiff(a, b, [0.10, 0.62, 0.80, 0.28]);   // text box
     a.close?.(); b.close?.();
-    return d < 8;
+    return nameDiff < 6 && textDiff < 8;
   } catch {
     return false; // if in doubt, trust the scan
   }
