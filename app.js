@@ -469,7 +469,10 @@ const MTG_GLOSSARY = {
     "mortel, trample = piétinement, haste = célérité, " +
     "vigilance = vigilance, lifelink = lien de vie, reach = portée, " +
     "menace = menace, defender = défenseur, flash = flash, " +
-    "hexproof = défense talismanique, scry = regard, mill = meuler.",
+    "hexproof = défense talismanique, scry = regard, mill = meuler. " +
+    'Creature types: goblin = gobelin (NEVER "gobelins" for the type), ' +
+    "elf = elfe, dwarf = nain, wizard = sorcier, rogue = gredin, " +
+    "wurm = guivre, drake = drakôn.",
 };
 
 async function aiTranslateImpl(text, lang) {
@@ -479,8 +482,8 @@ async function aiTranslateImpl(text, lang) {
     "EXACTLY the official game terminology printed on localized " +
     `${LANG_NAME[lang]} MTG cards. ${MTG_GLOSSARY[lang] || ""} ` +
     "Preserve line breaks and symbols in braces like {T}, {2}, {W/U} exactly. " +
-    'The token "CARDNAME" is a placeholder for the card\'s own name: keep it ' +
-    'EXACTLY as "CARDNAME" in your output, never drop or replace it. ' +
+    'ALL-CAPS tokens like "CARDNAME" or "DUNGEONNAME0" are placeholders for ' +
+    "names: keep them EXACTLY as-is in your output, never drop or replace them. " +
     "Output ONLY the translation, nothing else.";
   const resp = await fetchRetry("https://text.pollinations.ai/openai", {
     method: "POST",
@@ -598,13 +601,76 @@ const TYPE_DICT = {
 // French printed type lines separate subtypes with " : " instead of " — "
 const TYPE_SEP = { fr: " : " };
 
+// Official French creature/artifact subtypes (printed lowercase, joined
+// with "et"): translated deterministically instead of machine-translated.
+const SUBTYPE_DICT = {
+  fr: {
+    goblin: "gobelin", soldier: "soldat", zombie: "zombie", spirit: "esprit",
+    elf: "elfe", dwarf: "nain", giant: "géant", ogre: "ogre", troll: "troll",
+    orc: "orque", human: "humain", kor: "kor", merfolk: "ondin",
+    vampire: "vampire", skeleton: "squelette", nightmare: "cauchemar",
+    imp: "diablotin", devil: "diable", demon: "démon", angel: "ange",
+    dragon: "dragon", drake: "drakôn", wurm: "guivre", hydra: "hydre",
+    sphinx: "sphinx", griffin: "griffon", pegasus: "pégase", phoenix: "phénix",
+    unicorn: "licorne", elemental: "élémental", golem: "golem", myr: "myr",
+    thopter: "mécanoptère", construct: "construction", gnome: "gnome",
+    gargoyle: "gargouille", illusion: "illusion", avatar: "avatar",
+    sliver: "slivoïde", eldrazi: "eldrazi", faerie: "fée", satyr: "satyre",
+    knight: "chevalier", warrior: "guerrier", wizard: "sorcier",
+    cleric: "clerc", rogue: "gredin", monk: "moine", shaman: "shamane",
+    ninja: "ninja", samurai: "samouraï", pirate: "pirate",
+    beast: "bête", bird: "oiseau", cat: "chat", dog: "chien", wolf: "loup",
+    bear: "ours", boar: "sanglier", elephant: "éléphant", horse: "cheval",
+    goat: "chèvre", snake: "serpent", lizard: "lézard", frog: "grenouille",
+    fish: "poisson", whale: "baleine", octopus: "pieuvre", crab: "crabe",
+    kraken: "kraken", spider: "araignée", scorpion: "scorpion",
+    insect: "insecte", bat: "chauve-souris", rat: "rat", mouse: "souris",
+    squirrel: "écureuil", plant: "plante", saproling: "saprobionte",
+    wall: "mur", minotaur: "minotaure",
+    treasure: "trésor", clue: "indice", food: "nourriture",
+    blood: "sang", gold: "or", map: "carte", powerstone: "pierre de puissance",
+  },
+};
+
 async function translateTypeLine(typeLine, lang) {
   const [types, subtypes] = typeLine.split(/\s+—\s+/);
   const official = TYPE_DICT[lang]?.[types];
   if (!official) return { text: await machineTranslate(typeLine, lang), mt: true };
   if (!subtypes) return { text: official, mt: false };
+  const dict = SUBTYPE_DICT[lang];
+  const words = subtypes.split(/\s+/);
+  if (dict && words.every((w) => dict[w.toLowerCase()])) {
+    const sub = words.map((w) => dict[w.toLowerCase()]).join(lang === "fr" ? " et " : " ");
+    return { text: official + (TYPE_SEP[lang] || " — ") + sub, mt: false };
+  }
   const sub = await machineTranslate(subtypes, lang);
   return { text: official + (TYPE_SEP[lang] || " — ") + sub, mt: true };
+}
+
+// Text boxes made only of keywords ("Flying", "Flying, deathtouch"…) get
+// the official printed wording, never machine translation.
+const KEYWORD_DICT = {
+  fr: {
+    flying: "vol", "first strike": "initiative",
+    "double strike": "double initiative", deathtouch: "contact mortel",
+    trample: "piétinement", haste: "célérité", vigilance: "vigilance",
+    lifelink: "lien de vie", reach: "portée", menace: "menace",
+    defender: "défenseur", flash: "flash", indestructible: "indestructible",
+    hexproof: "défense talismanique", prowess: "prouesse", fear: "peur",
+    shroud: "linceul", changeling: "changeforme",
+  },
+};
+
+function translateKeywordText(text, lang) {
+  const dict = KEYWORD_DICT[lang];
+  if (!dict) return null;
+  const out = [];
+  for (const line of text.split("\n")) {
+    const parts = line.split(/,\s*/).map((p) => dict[p.trim().toLowerCase()]);
+    if (parts.some((p) => !p)) return null;
+    out.push(parts.map((p, i) => (i === 0 ? p.charAt(0).toUpperCase() + p.slice(1) : p)).join(", "));
+  }
+  return out.join("\n");
 }
 
 // Machine-translate with the provider chosen in the "Translator" dropdown,
@@ -647,17 +713,38 @@ async function resolveTranslations(englishCard, lang, loc) {
       }
     }
     try {
-      if (!t.name) { t.name = await machineTranslate(face.name, lang); usedMT = true; }
+      if (!t.name) {
+        // Tokens named after their creature type ("Goblin", "Zombie"…)
+        // take the official subtype word, not machine translation.
+        const sub = /\bToken\b/.test(face.type_line || "") && !face.name.includes(" ")
+          ? SUBTYPE_DICT[lang]?.[face.name.toLowerCase()] : null;
+        if (sub) {
+          t.name = sub.charAt(0).toUpperCase() + sub.slice(1);
+        } else if (/\bDungeon\b/.test(face.type_line || "")) {
+          t.name = face.name; // dungeon names are proper nouns
+        } else {
+          t.name = await machineTranslate(face.name, lang);
+          usedMT = true;
+        }
+      }
       if (!t.type && face.type_line) {
         const tl = await translateTypeLine(face.type_line, lang);
         t.type = tl.text;
         usedMT = usedMT || tl.mt;
       }
-      if (!t.text && face.oracle_text) {
+      // Game-aid helpers with no rules text carry it as flavor instead
+      // (e.g. City's Blessing) — translate that.
+      const engText = face.oracle_text ||
+        ((/^Card\b/.test(face.type_line || "") && face.flavor_text) || "");
+      if (!t.text && engText) {
+        // Keyword-only text ("Flying, deathtouch") → official wording
+        t.text = translateKeywordText(engText, lang);
+      }
+      if (!t.text && engText) {
         // Cards referring to themselves: shield the name behind a token
         // that survives translation, then re-inject the translated name
         // (already resolved above).
-        let src = face.oracle_text;
+        let src = engText;
         let substituted = false;
         if (t.name && t.name !== face.name) {
           const short = face.name.split(",")[0].trim();
@@ -667,10 +754,19 @@ async function resolveTranslations(englishCard, lang, loc) {
             substituted = true;
           }
         }
+        // Dungeon names referenced in the text (e.g. "venture into
+        // Undercity" on The Initiative) are proper nouns: shield them too.
+        const dungeonNames = faces
+          .filter((f) => /\bDungeon\b/.test(f.type_line || "") && src.includes(f.name))
+          .map((f) => f.name);
+        dungeonNames.forEach((n, j) => { src = src.split(n).join(`DUNGEONNAME${j}`); });
         t.text = await machineTranslate(src, lang);
         if (substituted) {
           t.text = t.text.replace(/cardname/gi, t.name);
         }
+        dungeonNames.forEach((n, j) => {
+          t.text = t.text.replace(new RegExp(`dungeonname${j}`, "gi"), n);
+        });
         usedMT = true;
       }
     } catch (e) {
@@ -1034,9 +1130,10 @@ function drawSplitOverlay(ctx, W, H, texts, engFaces, frame) {
 
 // Token / emblem frame (M15 token style): centered name in a rounded bar at
 // the top, type bar and text box in the lower third (the art window is much
-// taller than on a normal card). Region fractions calibrated on Scryfall
-// "large" token scans.
-function drawTokenOverlay(bitmap, tr, hasPT) {
+// taller than on a normal card). On textless (vanilla) tokens there is no
+// text box at all and the type bar sits just above the P/T box. Region
+// fractions calibrated on Scryfall "large" token scans.
+function drawTokenOverlay(bitmap, tr, hasPT, textless = false) {
   const W = bitmap.width, H = bitmap.height;
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
@@ -1048,9 +1145,10 @@ function drawTokenOverlay(bitmap, tr, hasPT) {
   }
   if (tr.type) {
     // Leave the set symbol (right side of the type bar) visible
-    paintBarText(ctx, W, tr.type, 0.075 * W, 0.686 * H, 0.865 * W, 0.744 * H, "bold ");
+    const typeY = textless ? [0.812, 0.878] : [0.686, 0.744];
+    paintBarText(ctx, W, tr.type, 0.075 * W, typeY[0] * H, 0.865 * W, typeY[1] * H, "bold ");
   }
-  if (tr.text) {
+  if (tr.text && !textless) {
     if (hasPT) {
       // Blank the original text left of the P/T box, keep the P/T visible
       paintPatch(ctx, 0.09 * W, 0.895 * H, 0.77 * W, 0.95 * H);
@@ -1058,6 +1156,37 @@ function drawTokenOverlay(bitmap, tr, hasPT) {
     } else {
       paintTextBox(ctx, W, 0.030 * H, tr.text, 0.085 * W, 0.762 * H, 0.915 * W, 0.945 * H);
     }
+  }
+
+  return canvas.toDataURL("image/jpeg", 0.92);
+}
+
+// Game-aid helper cards (The Monarch, City's Blessing…): a black rounded
+// title bar with a freeform text panel below it, at a different height on
+// each card — every known helper has its own calibrated regions (fractions
+// of the card height, calibrated on the newest printing, which is the one
+// selected by default). `box: null` = full-art helper, name bar only.
+const HELPER_GEOM = {
+  "The Monarch":         { bar: [0.569, 0.621], box: [0.628, 0.922] },
+  "City's Blessing":     { bar: [0.680, 0.732], box: [0.738, 0.922] },
+  "The Initiative":      { bar: [0.569, 0.621], box: [0.628, 0.922] },
+  "Start Your Engines!": { bar: [0.674, 0.730], box: [0.737, 0.922] },
+  "Max Speed":           { bar: [0.056, 0.107], box: null },
+  "Energy Reserve":      { bar: [0.056, 0.107], box: null },
+};
+
+function drawHelperOverlay(bitmap, tr, geom) {
+  const W = bitmap.width, H = bitmap.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(bitmap, 0, 0);
+
+  if (tr.name) {
+    paintBarText(ctx, W, tr.name, 0.085 * W, geom.bar[0] * H, 0.915 * W, geom.bar[1] * H, "bold ", true);
+  }
+  if (tr.text && geom.box) {
+    paintTextBox(ctx, W, 0.030 * H, tr.text, 0.08 * W, geom.box[0] * H, 0.92 * W, geom.box[1] * H);
   }
 
   return canvas.toDataURL("image/jpeg", 0.92);
@@ -1137,15 +1266,22 @@ async function buildCardEntry(englishCard, lang, loc, eng, prefPrint, versionMod
 }
 
 // Whether the selected print could take a translation overlay (regardless
-// of the user's "keep English" choice). Game-aid helpers (type "Card":
-// The Monarch, Storm Counter…) and Dungeons are freeform panels or maps
-// with no standard frame — they keep their English scan.
+// of the user's "keep English" choice). Dungeons are maps with no frame to
+// paint on; game-aid helpers (type "Card") are freeform panels, translated
+// only when their layout is known (HELPER_GEOM), like The Monarch or
+// City's Blessing — others (Storm Counter…) keep their English scan.
+function overlayableFace(face) {
+  const t = face.type_line || "";
+  if (/\bDungeon\b/.test(t)) return false;
+  if (/^Card\b/.test(t)) return !!HELPER_GEOM[face.name];
+  return true;
+}
+
 function printTranslatable(entry) {
   const print = entry.prints[entry.printIndex];
-  const frontType = (entry.english.card_faces?.[0]?.type_line ?? entry.english.type_line) || "";
+  const faces = entry.english.card_faces?.length ? entry.english.card_faces : [entry.english];
   return entry.lang !== "en" && print.lang !== entry.lang &&
-    OVERLAY_LAYOUTS.has(entry.english.layout) &&
-    !/^Card\b|\bDungeon\b/.test(frontType);
+    OVERLAY_LAYOUTS.has(entry.english.layout) && faces.some(overlayableFace);
 }
 
 function printNeedsOverlay(entry) {
@@ -1218,10 +1354,18 @@ async function buildFaces(entry) {
       const mana = (printFaces[i]?.mana_cost || "").match(/{[^}]+}/g)?.length || 0;
       const hasPT = engFaces[i]?.power != null;
       if (TOKEN_LAYOUTS.has(entry.english.layout)) {
-        // Emblems keep their title untouched: the bar shows the
-        // planeswalker's name, a proper noun that isn't translated.
-        const trTok = entry.english.layout === "emblem" ? { ...tr, name: null } : tr;
-        faces.push(drawTokenOverlay(bitmap, trTok, hasPT));
+        const engFace = engFaces[i] || entry.english;
+        const geom = HELPER_GEOM[engFace.name];
+        if (!overlayableFace(engFace)) {
+          faces.push(bitmapToDataUrl(bitmap)); // dungeon map / unknown helper panel
+        } else if (geom) {
+          faces.push(drawHelperOverlay(bitmap, tr, geom));
+        } else {
+          // Emblems keep their title untouched: the bar shows the
+          // planeswalker's name, a proper noun that isn't translated.
+          const trTok = entry.english.layout === "emblem" ? { ...tr, name: null } : tr;
+          faces.push(drawTokenOverlay(bitmap, trTok, hasPT, !engFace.oracle_text));
+        }
       } else {
         faces.push(drawWithOverlay(bitmap, tr, mana, hasPT));
       }
