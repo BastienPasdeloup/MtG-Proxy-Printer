@@ -688,7 +688,9 @@ async function machineTranslate(text, lang) {
   let lastError = null;
   for (const key of order) {
     try {
-      return await MT_PROVIDERS[key].fn(text, lang);
+      const out = await MT_PROVIDERS[key].fn(text, lang);
+      // Some providers emit the two characters "\n" instead of a newline
+      return out.replace(/\\n/g, "\n");
     } catch (e) {
       console.warn(`${MT_PROVIDERS[key].label} failed:`, e);
       lastError = e;
@@ -739,10 +741,7 @@ async function resolveTranslations(englishCard, lang, loc) {
         t.type = tl.text;
         usedMT = usedMT || tl.mt;
       }
-      // Game-aid helpers with no rules text carry it as flavor instead
-      // (e.g. City's Blessing) — translate that.
-      const engText = face.oracle_text ||
-        ((/^Card\b/.test(face.type_line || "") && face.flavor_text) || "");
+      const engText = face.oracle_text || "";
       if (!t.text && engText) {
         // Keyword-only text ("Flying, deathtouch") → official wording
         t.text = translateKeywordText(engText, lang);
@@ -1175,7 +1174,7 @@ function drawTokenOverlay(bitmap, tr, hasPT, textless = false) {
 // selected by default). `box: null` = full-art helper, name bar only.
 const HELPER_GEOM = {
   "The Monarch":         { bar: [0.569, 0.621], box: [0.628, 0.922] },
-  "City's Blessing":     { bar: [0.680, 0.732], box: [0.738, 0.922] },
+  "City's Blessing":     { bar: [0.680, 0.732], box: null }, // flavor only: kept as printed
   "The Initiative":      { bar: [0.569, 0.621], box: [0.628, 0.922] },
   "Start Your Engines!": { bar: [0.674, 0.730], box: [0.737, 0.922] },
   "Max Speed":           { bar: [0.056, 0.107], box: null },
@@ -1994,8 +1993,15 @@ function makeAddTile() {
     input.focus();
   });
 
-  input.addEventListener("input", () => {
+  input.addEventListener("input", (e) => {
     clearTimeout(autocompleteTimer);
+    // Picking a datalist suggestion fires an input event too
+    // (inputType "insertReplacementText" / undefined): clear the list and
+    // stay quiet until the user actually types again.
+    if (!e.inputType || e.inputType === "insertReplacementText") {
+      datalist.innerHTML = "";
+      return;
+    }
     const q = input.value.trim();
     if (q.length < 2) return;
     autocompleteTimer = setTimeout(async () => {
