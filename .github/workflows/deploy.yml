@@ -1,0 +1,26 @@
+# GitHub Pages serves the gh-pages branch (a mirror of main). This workflow
+# keeps it in sync automatically: every push to main is force-pushed to
+# gh-pages, which triggers the Pages build and deployment.
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-pages
+  cancel-in-progress: true
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Mirror main to gh-pages
+        run: git push origin HEAD:gh-pages --force
