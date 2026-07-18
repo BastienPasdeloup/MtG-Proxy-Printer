@@ -406,6 +406,18 @@ button.primary.big {
   background: #8a8fa3;
 }
 
+/* resolution badge sits top left, mirroring the language badge */
+.badge-res {
+  background: #7a5ad0;
+  right: auto;
+  left: 0.55rem;
+}
+
+.card-tile.wide .badge-res {
+  right: auto;
+  left: calc(5.5% + 0.55rem);
+}
+
 .add-tile {
   border-style: dashed;
   align-items: center;

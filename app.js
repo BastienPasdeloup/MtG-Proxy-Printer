@@ -1069,6 +1069,81 @@ async function loadImage(url) {
   return await createImageBitmap(blob);
 }
 
+/* ------------------------------------------------------------
+ * Low-resolution scans: Scryfall flags them via image_status
+ * ("lowres" / "placeholder" instead of "highres_scan"). They print
+ * blurry, so they are upscaled and sharpened — the HD badge on the
+ * card lets the user switch back to the original scan.
+ * ---------------------------------------------------------- */
+
+// One pass of a separable 3x3 (1-2-1) Gaussian blur; returns a new buffer.
+function blur121(src, W, H) {
+  const tmp = new Uint8ClampedArray(src.length);
+  const out = new Uint8ClampedArray(src.length);
+  for (let y = 0; y < H; y++) {
+    const row = y * W * 4;
+    for (let x = 0; x < W; x++) {
+      const i = row + x * 4;
+      const l = row + Math.max(0, x - 1) * 4;
+      const r = row + Math.min(W - 1, x + 1) * 4;
+      tmp[i] = (src[l] + 2 * src[i] + src[r]) / 4;
+      tmp[i + 1] = (src[l + 1] + 2 * src[i + 1] + src[r + 1]) / 4;
+      tmp[i + 2] = (src[l + 2] + 2 * src[i + 2] + src[r + 2]) / 4;
+    }
+  }
+  for (let y = 0; y < H; y++) {
+    const row = y * W * 4;
+    const up = Math.max(0, y - 1) * W * 4;
+    const dn = Math.min(H - 1, y + 1) * W * 4;
+    for (let x = 0; x < W; x++) {
+      const i = row + x * 4, u = up + x * 4, d = dn + x * 4;
+      out[i] = (tmp[u] + 2 * tmp[i] + tmp[d]) / 4;
+      out[i + 1] = (tmp[u + 1] + 2 * tmp[i + 1] + tmp[d + 1]) / 4;
+      out[i + 2] = (tmp[u + 2] + 2 * tmp[i + 2] + tmp[d + 2]) / 4;
+    }
+  }
+  return out;
+}
+
+// Upscale to ~2x (capped at the size of a highres "large" scan doubled) with
+// smooth interpolation, then apply an unsharp mask so edges and text come
+// out crisp at print size instead of blurry.
+function enhanceBitmap(bitmap) {
+  const scale = Math.max(1, Math.min(2, 1344 / bitmap.width));
+  const W = Math.round(bitmap.width * scale);
+  const H = Math.round(bitmap.height * scale);
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+  ctx.drawImage(bitmap, 0, 0, W, H);
+
+  const img = ctx.getImageData(0, 0, W, H);
+  const data = img.data;
+  // Blur twice: after the 2x upscale the blur radius must exceed the
+  // interpolation's own smoothing for the mask to bite.
+  const blurred = blur121(blur121(data, W, H), W, H);
+  const AMOUNT = 0.8;
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] += AMOUNT * (data[i] - blurred[i]);
+    data[i + 1] += AMOUNT * (data[i + 1] - blurred[i + 1]);
+    data[i + 2] += AMOUNT * (data[i + 2] - blurred[i + 2]);
+  }
+  ctx.putImageData(img, 0, 0);
+  return canvas;
+}
+
+// A face image of the selected print, enhanced when only a low-resolution
+// scan exists — unless the user clicked the HD badge to keep the original.
+async function loadFaceImage(entry, url) {
+  const bitmap = await loadImage(url);
+  if (!entry.lowResScan || entry.useOriginalImage) return bitmap;
+  const enhanced = enhanceBitmap(bitmap);
+  bitmap.close?.();
+  return enhanced;
+}
+
 
 /* ------------------------------------------------------------
  * Mana / game symbols: "{T}", "{2}{G}", "{W/U}"… are rendered with
@@ -1169,27 +1244,68 @@ function logRegion(ctx, x0, y0, x1, y1) {
   regionLog.push([x0 / W, y0 / H, x1 / W, y1 / H]);
 }
 
+// Dominant color of the card area a box is about to cover, sampled from the
+// canvas before painting (downscaled, then a coarse color histogram — the
+// text glyphs on top of the background land in their own buckets and are
+// outvoted, so the winner is the background of the covered box itself).
+function regionBaseColor(ctx, x0, y0, x1, y1) {
+  const S = 32;
+  const c = document.createElement("canvas");
+  c.width = S; c.height = S;
+  const cx = c.getContext("2d");
+  cx.drawImage(ctx.canvas, x0, y0, Math.max(1, x1 - x0), Math.max(1, y1 - y0), 0, 0, S, S);
+  const d = cx.getImageData(0, 0, S, S).data;
+  const buckets = new Map();
+  for (let i = 0; i < d.length; i += 4) {
+    const key = ((d[i] >> 4) << 8) | ((d[i + 1] >> 4) << 4) | (d[i + 2] >> 4);
+    const b = buckets.get(key) || { n: 0, r: 0, g: 0, b: 0 };
+    b.n++; b.r += d[i]; b.g += d[i + 1]; b.b += d[i + 2];
+    buckets.set(key, b);
+  }
+  let best = null;
+  for (const b of buckets.values()) if (!best || b.n > best.n) best = b;
+  return { r: best.r / best.n, g: best.g / best.n, b: best.b / best.n };
+}
+
+// Fill / border / ink colors for a box, matched to the area it covers so it
+// blends with the frame: the dark title bar of a black card gets a dark box
+// with light text, not a glaring cream rectangle.
+function boxStyle(ctx, x0, y0, x1, y1) {
+  let base = null;
+  try { base = regionBaseColor(ctx, x0, y0, x1, y1); } catch { /* keep the parchment default */ }
+  if (!base) return { fill: "#f3eedf", stroke: "rgba(60, 50, 30, 0.65)", ink: "#141210" };
+  const fill = `rgb(${Math.round(base.r)}, ${Math.round(base.g)}, ${Math.round(base.b)})`;
+  const lum = 0.299 * base.r + 0.587 * base.g + 0.114 * base.b;
+  return lum < 130
+    ? { fill, stroke: "rgba(235, 231, 222, 0.55)", ink: "#f3efe6" }
+    : { fill, stroke: "rgba(60, 50, 30, 0.65)", ink: "#141210" };
+}
+
 function paintPatch(ctx, x0, y0, x1, y1) {
   logRegion(ctx, x0, y0, x1, y1);
-  ctx.fillStyle = "#f3eedf";
+  const style = boxStyle(ctx, x0, y0, x1, y1);
+  ctx.fillStyle = style.fill; // fully opaque or the English text ghosts through
   ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+  return style;
 }
 
 function paintParchment(ctx, W, x0, y0, x1, y1) {
   logRegion(ctx, x0, y0, x1, y1);
-  ctx.fillStyle = "#f3eedf"; // fully opaque or the English text ghosts through
-  ctx.strokeStyle = "rgba(60, 50, 30, 0.65)";
+  const style = boxStyle(ctx, x0, y0, x1, y1);
+  ctx.fillStyle = style.fill; // fully opaque or the English text ghosts through
+  ctx.strokeStyle = style.stroke;
   ctx.lineWidth = Math.max(1, 0.003 * W);
   ctx.beginPath();
   ctx.roundRect(x0, y0, x1 - x0, y1 - y0, 0.01 * W);
   ctx.fill();
   ctx.stroke();
+  return style;
 }
 
 // Single line, shrunk to fit, vertically centered in its bar
 // (horizontally centered too with `center` — token frames center the name)
 function paintBarText(ctx, W, text, x0, y0, x1, y1, style, center = false) {
-  paintParchment(ctx, W, x0, y0, x1, y1);
+  const box = paintParchment(ctx, W, x0, y0, x1, y1);
   const pad = 0.015 * W;
   const maxW = x1 - x0 - 2 * pad;
   let size = (y1 - y0) * 0.62;
@@ -1198,7 +1314,7 @@ function paintBarText(ctx, W, text, x0, y0, x1, y1, style, center = false) {
     if (ctx.measureText(text).width <= maxW || size < (y1 - y0) * 0.3) break;
     size *= 0.94;
   }
-  ctx.fillStyle = "#141210";
+  ctx.fillStyle = box.ink;
   ctx.textBaseline = "middle";
   const x = center
     ? x0 + pad + Math.max(0, (maxW - ctx.measureText(text).width) / 2)
@@ -1210,7 +1326,7 @@ function paintBarText(ctx, W, text, x0, y0, x1, y1, style, center = false) {
 // game symbols (call preloadSymbols() on the text beforehand).
 function paintTextBox(ctx, W, baseFontSize, text, x0, y0, x1, y1) {
   const pad = 0.018 * W;
-  paintParchment(ctx, W, x0, y0, x1, y1);
+  const box = paintParchment(ctx, W, x0, y0, x1, y1);
   const boxW = x1 - x0 - 2 * pad;
   const boxH = y1 - y0 - 2 * pad;
 
@@ -1253,7 +1369,7 @@ function paintTextBox(ctx, W, baseFontSize, text, x0, y0, x1, y1) {
     fontSize *= 0.93;
   }
 
-  ctx.fillStyle = "#141210";
+  ctx.fillStyle = box.ink;
   ctx.textBaseline = "top";
   const symW = fontSize * 1.02;
   const spaceW = ctx.measureText(" ").width;
@@ -1651,6 +1767,10 @@ async function buildFaces(entry) {
   if (urls.length === 0) throw new Error(`No image available for ${print.name}`);
   const printFaces = print.card_faces?.length ? print.card_faces : [print];
 
+  // Only a low-resolution scan exists for this print: its faces get the
+  // upscale + sharpen treatment (see loadFaceImage), flagged by the HD badge.
+  entry.lowResScan = !!print.image_status && print.image_status !== "highres_scan";
+
   // Verify (once per print) that a localized scan really is localized
   if (entry.lang !== "en" && print.lang === entry.lang &&
       print._badScan === undefined && OVERLAY_LAYOUTS.has(entry.english.layout)) {
@@ -1669,7 +1789,7 @@ async function buildFaces(entry) {
   // Split cards: rotate the scan 90° clockwise so both halves read
   // horizontally (displayed landscape; rotated back at PDF time).
   if (entry.rotated) {
-    const bitmap = await loadImage(urls[0]);
+    const bitmap = await loadFaceImage(entry, urls[0]);
     const canvas = document.createElement("canvas");
     canvas.width = bitmap.height;
     canvas.height = bitmap.width;
@@ -1694,7 +1814,7 @@ async function buildFaces(entry) {
   if (entry.english.layout === "adventure" && needsOverlay && entry.overlayTexts) {
     const engFaces = entry.english.card_faces || [];
     await preloadSymbols([{ text: engFaces[1]?.mana_cost || "" }]);
-    const bitmap = await loadImage(urls[0]);
+    const bitmap = await loadFaceImage(entry, urls[0]);
     const hasPT = engFaces[0]?.power != null;
     regionLog = [];
     const face = drawAdventureOverlay(bitmap, entry.overlayTexts, engFaces, hasPT);
@@ -1707,7 +1827,7 @@ async function buildFaces(entry) {
   const engFaces = entry.english.card_faces?.length ? entry.english.card_faces : [entry.english];
   const faces = [];
   for (let i = 0; i < urls.length; i++) {
-    const bitmap = await loadImage(urls[i]);
+    const bitmap = await loadFaceImage(entry, urls[i]);
     const tr = needsOverlay ? entry.overlayTexts?.[i] : null;
     regionLog = [];
     if (tr && (tr.name || tr.type || tr.text)) {
@@ -2217,9 +2337,45 @@ function makeTile(card) {
 
   tile.classList.toggle("wide", !!card.rotated);
 
+  // HD badge (top left): shown when the selected print only has a
+  // low-resolution scan, which the app upscales and sharpens by default —
+  // clicking toggles back to the original image.
+  const resEl = document.createElement("span");
+  resEl.className = "badge badge-res badge-click";
+  const updateResBadge = () => {
+    resEl.classList.toggle("hidden", !card.lowResScan);
+    if (!card.lowResScan) return;
+    if (card.useOriginalImage) {
+      resEl.textContent = "LR";
+      resEl.title = "Low-resolution scan kept as-is — click to enhance it for print";
+    } else {
+      resEl.textContent = "HD";
+      resEl.title = "Only a low-resolution scan exists — enhanced for print (upscaled and sharpened). Click to use the original image instead";
+    }
+  };
+  updateResBadge();
+  resEl.addEventListener("click", async () => {
+    if (resEl.dataset.busy) return;
+    resEl.dataset.busy = "1";
+    card.useOriginalImage = !card.useOriginalImage;
+    img.style.opacity = "0.4";
+    try {
+      card.faces = await buildFaces(card);
+      img.src = card.faces[0];
+      face = 0;
+    } catch (e) {
+      console.error(e);
+      setStatus(`Could not update ${card.name}: ${e.message}`, null, true);
+    }
+    updateResBadge();
+    img.style.opacity = "";
+    delete resEl.dataset.busy;
+  });
+
   const imgWrap = document.createElement("div");
   imgWrap.className = "img-wrap";
   imgWrap.appendChild(badgeEl);
+  imgWrap.appendChild(resEl);
   const img = document.createElement("img");
   img.src = card.faces[0];
   img.alt = card.name;
@@ -2283,6 +2439,7 @@ function makeTile(card) {
         img.src = card.faces[0];
         card.status = computeStatus(card);
         updateBadge(badgeEl, card);
+        updateResBadge(); // the new print may (not) be a low-res scan
         face = 0;
       } catch (e) {
         console.error(e);

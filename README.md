@@ -41,7 +41,8 @@ Every card ends up in the chosen language:
   the app detects it by comparing the text box with the English scan pixel-wise and applies
   the translation overlay instead.
 - Otherwise the English scan is used and its **name, type line and text box** are repainted with the
-  translation, resolved in this order:
+  translation. Each repainted box picks up the color of the frame area it covers (a dark title bar
+  gets a dark box with light text, not a cream rectangle). The translation is resolved in this order:
   1. official printed text from Scryfall's localized print data (blue **T** badge),
   2. official Gatherer translations via api.magicthegathering.io (blue **T** badge),
   3. machine translation — an MtG-aware AI translator (default), Google Translate, Microsoft Translator or MyMemory, selectable in the UI —
@@ -50,6 +51,13 @@ Every card ends up in the chosen language:
   shown rotated). Cards with other non-standard frames (sagas, classes, flip cards…) keep the
   English scan when no localized print exists (gray **EN** badge) — the overlay geometry would
   not match.
+
+## Low-resolution scans
+
+Some printings only exist as a low-resolution scan on Scryfall. Those would print blurry, so they
+are automatically **upscaled 2× and sharpened** (unsharp mask) and flagged with a purple **HD**
+badge on the card — click the badge to switch back to the original image (**LR**), and again to
+re-enhance it.
 
 ## Technical notes
 
