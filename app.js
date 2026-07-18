@@ -1105,31 +1105,46 @@ function blur121(src, W, H) {
   return out;
 }
 
-// Upscale to ~2x (capped at the size of a highres "large" scan doubled) with
-// smooth interpolation, then apply an unsharp mask so edges and text come
-// out crisp at print size instead of blurry.
+// Unsharp mask, in place: `passes` blur passes widen the mask radius,
+// `amount` scales how hard edges are pushed apart.
+function unsharp(imgData, W, H, passes, amount) {
+  const data = imgData.data;
+  let blurred = data;
+  for (let p = 0; p < passes; p++) blurred = blur121(blurred, W, H);
+  for (let i = 0; i < data.length; i += 4) {
+    data[i] += amount * (data[i] - blurred[i]);
+    data[i + 1] += amount * (data[i + 1] - blurred[i + 1]);
+    data[i + 2] += amount * (data[i + 2] - blurred[i + 2]);
+  }
+}
+
+// Two-stage enhancement of a low-resolution scan: a strong unsharp mask at
+// the scan's NATIVE resolution first (that is the scale the blur lives at —
+// sharpening only after upscaling barely bites), then a 2x smooth upscale
+// (capped at double a highres "large" scan) with a lighter second pass to
+// crisp the interpolated edges.
 function enhanceBitmap(bitmap) {
-  const scale = Math.max(1, Math.min(2, 1344 / bitmap.width));
-  const W = Math.round(bitmap.width * scale);
-  const H = Math.round(bitmap.height * scale);
+  const w0 = bitmap.width, h0 = bitmap.height;
+  const c0 = document.createElement("canvas");
+  c0.width = w0; c0.height = h0;
+  const ctx0 = c0.getContext("2d");
+  ctx0.drawImage(bitmap, 0, 0);
+  const img0 = ctx0.getImageData(0, 0, w0, h0);
+  unsharp(img0, w0, h0, 2, 1.2);
+  ctx0.putImageData(img0, 0, 0);
+
+  const scale = Math.max(1, Math.min(2, 1344 / w0));
+  const W = Math.round(w0 * scale);
+  const H = Math.round(h0 * scale);
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bitmap, 0, 0, W, H);
+  ctx.drawImage(c0, 0, 0, W, H);
 
   const img = ctx.getImageData(0, 0, W, H);
-  const data = img.data;
-  // Blur twice: after the 2x upscale the blur radius must exceed the
-  // interpolation's own smoothing for the mask to bite.
-  const blurred = blur121(blur121(data, W, H), W, H);
-  const AMOUNT = 0.8;
-  for (let i = 0; i < data.length; i += 4) {
-    data[i] += AMOUNT * (data[i] - blurred[i]);
-    data[i + 1] += AMOUNT * (data[i + 1] - blurred[i + 1]);
-    data[i + 2] += AMOUNT * (data[i + 2] - blurred[i + 2]);
-  }
+  unsharp(img, W, H, 2, 0.6);
   ctx.putImageData(img, 0, 0);
   return canvas;
 }
@@ -1267,18 +1282,16 @@ function regionBaseColor(ctx, x0, y0, x1, y1) {
   return { r: best.r / best.n, g: best.g / best.n, b: best.b / best.n };
 }
 
-// Fill / border / ink colors for a box, matched to the area it covers so it
-// blends with the frame: the dark title bar of a black card gets a dark box
-// with light text, not a glaring cream rectangle.
+// Fill / ink colors for a box, matched to the area it covers so it blends
+// with the frame: the dark title bar of a black card gets a dark box with
+// light text, not a glaring cream rectangle.
 function boxStyle(ctx, x0, y0, x1, y1) {
   let base = null;
   try { base = regionBaseColor(ctx, x0, y0, x1, y1); } catch { /* keep the parchment default */ }
-  if (!base) return { fill: "#f3eedf", stroke: "rgba(60, 50, 30, 0.65)", ink: "#141210" };
+  if (!base) return { fill: "#f3eedf", ink: "#141210" };
   const fill = `rgb(${Math.round(base.r)}, ${Math.round(base.g)}, ${Math.round(base.b)})`;
   const lum = 0.299 * base.r + 0.587 * base.g + 0.114 * base.b;
-  return lum < 130
-    ? { fill, stroke: "rgba(235, 231, 222, 0.55)", ink: "#f3efe6" }
-    : { fill, stroke: "rgba(60, 50, 30, 0.65)", ink: "#141210" };
+  return { fill, ink: lum < 130 ? "#f3efe6" : "#141210" };
 }
 
 function paintPatch(ctx, x0, y0, x1, y1) {
@@ -1293,12 +1306,9 @@ function paintParchment(ctx, W, x0, y0, x1, y1) {
   logRegion(ctx, x0, y0, x1, y1);
   const style = boxStyle(ctx, x0, y0, x1, y1);
   ctx.fillStyle = style.fill; // fully opaque or the English text ghosts through
-  ctx.strokeStyle = style.stroke;
-  ctx.lineWidth = Math.max(1, 0.003 * W);
   ctx.beginPath();
   ctx.roundRect(x0, y0, x1 - x0, y1 - y0, 0.01 * W);
   ctx.fill();
-  ctx.stroke();
   return style;
 }
 
@@ -1427,8 +1437,8 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT) {
     paintBarText(ctx, W, tr.name, 0.068 * W, 0.048 * H, x1, 0.100 * H, "bold ");
   }
   if (tr.type) {
-    // Leave the set symbol (right side of the type bar) visible
-    paintBarText(ctx, W, tr.type, 0.068 * W, 0.563 * H, 0.872 * W, 0.610 * H, "bold ");
+    // Leave the set symbol (right side of the type bar) fully visible
+    paintBarText(ctx, W, tr.type, 0.068 * W, 0.563 * H, 0.845 * W, 0.610 * H, "bold ");
   }
   if (tr.text) {
     if (hasPT) {
@@ -1463,7 +1473,7 @@ function drawAdventureOverlay(bitmap, texts, engFaces, hasPT) {
     paintBarText(ctx, W, creature.name, 0.068 * W, 0.048 * H, x1, 0.100 * H, "bold ");
   }
   if (creature.type) {
-    paintBarText(ctx, W, creature.type, 0.068 * W, 0.563 * H, 0.872 * W, 0.610 * H, "bold ");
+    paintBarText(ctx, W, creature.type, 0.068 * W, 0.563 * H, 0.845 * W, 0.610 * H, "bold ");
   }
   // Adventure half (left column): name bar with the adventure's own mana
   // cost redrawn beside it, then type bar and text
@@ -1518,8 +1528,8 @@ function drawSplitOverlay(ctx, W, H, texts, engFaces, frame) {
         (h.x0 + 0.004) * W, g.textY[0] * H, (h.x1 - 0.008) * W, g.textY[1] * H);
     }
     if (tr.type) {
-      // Leave the set symbol (right end of the type bar) visible
-      paintBarText(ctx, W, tr.type, (h.x0 + 0.004) * W, g.typeY[0] * H, (h.x1 - 0.058) * W, g.typeY[1] * H, "bold ");
+      // Leave the set symbol (right end of the type bar) fully visible
+      paintBarText(ctx, W, tr.type, (h.x0 + 0.004) * W, g.typeY[0] * H, (h.x1 - 0.07) * W, g.typeY[1] * H, "bold ");
     }
     if (tr.name) {
       // Leave the mana cost fully visible
@@ -1545,9 +1555,9 @@ function drawTokenOverlay(bitmap, tr, hasPT, textless = false) {
     paintBarText(ctx, W, tr.name, 0.085 * W, 0.057 * H, 0.915 * W, 0.111 * H, "bold ", true);
   }
   if (tr.type) {
-    // Leave the set symbol (right side of the type bar) visible
+    // Leave the set symbol (right side of the type bar) fully visible
     const typeY = textless ? [0.812, 0.878] : [0.686, 0.744];
-    paintBarText(ctx, W, tr.type, 0.075 * W, typeY[0] * H, 0.865 * W, typeY[1] * H, "bold ");
+    paintBarText(ctx, W, tr.type, 0.075 * W, typeY[0] * H, 0.84 * W, typeY[1] * H, "bold ");
   }
   if (tr.text && !textless) {
     if (hasPT) {
