@@ -27,9 +27,13 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    button at the bottom right of the image). Translated cards show a pencil cursor — click the
    card to edit its name, type line and text manually (only the fields painted on that card
    are offered).
-5. Click **Generate Proxies** — downloads an A4 PDF with 9 cards per page, each 62 × 87 mm, with cut marks.
-   If the deck contains double-sided cards, you are asked whether to print backs too.
+5. Click **Generate Proxies** — downloads an A4 PDF with 9 cards per page, each 62 × 87 mm, with cut
+   marks, thin grey lines between adjacent cards, and the cards' rounded corners squared off in black
+   for a clean cut. If the deck contains double-sided cards, you are asked whether to print backs too.
    Print at **100% scale** (no "fit to page").
+
+Nothing is stored server-side — the app has no backend and keeps everything in the page, so it warns
+before you leave once a deck is loaded.
 
 ## Language fallback
 
@@ -55,8 +59,9 @@ Every card ends up in the chosen language:
 ## Low-resolution scans
 
 Some printings only exist as a low-resolution scan on Scryfall. Those would print blurry, so they
-are automatically **upscaled 2× and sharpened** (unsharp mask) and flagged with a purple **HD**
-badge on the card — click the badge to switch back to the original image (**LR**), and again to
+are automatically enhanced — sharpened at native resolution (a fine + a wider unsharp mask, aimed at
+the small rules text), **upscaled 3×**, then sharpened again — and flagged with a purple **HD** badge
+under the language badge. Click the badge to switch back to the original image (**LR**), and again to
 re-enhance it.
 
 ## Technical notes

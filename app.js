@@ -1118,11 +1118,14 @@ function unsharp(imgData, W, H, passes, amount) {
   }
 }
 
-// Two-stage enhancement of a low-resolution scan: a strong unsharp mask at
-// the scan's NATIVE resolution first (that is the scale the blur lives at —
-// sharpening only after upscaling barely bites), then a 2x smooth upscale
-// (capped at double a highres "large" scan) with a lighter second pass to
-// crisp the interpolated edges.
+// Multi-stage enhancement of a low-resolution scan, aimed above all at
+// making the small rules text legible:
+//  1. At the scan's NATIVE resolution (where the blur actually lives),
+//     sharpen twice — a fine 1px-radius pass to crisp glyph edges and a
+//     wider pass to lift local contrast between ink and background.
+//  2. Upscale 3x with smooth interpolation (capped near a highres "large"
+//     scan tripled), giving the text enough pixels to stay sharp at 87 mm.
+//  3. A final fine + wide unsharp pair to re-crisp the interpolated edges.
 function enhanceBitmap(bitmap) {
   const w0 = bitmap.width, h0 = bitmap.height;
   const c0 = document.createElement("canvas");
@@ -1130,10 +1133,11 @@ function enhanceBitmap(bitmap) {
   const ctx0 = c0.getContext("2d");
   ctx0.drawImage(bitmap, 0, 0);
   const img0 = ctx0.getImageData(0, 0, w0, h0);
-  unsharp(img0, w0, h0, 2, 1.2);
+  unsharp(img0, w0, h0, 1, 1.1); // fine: glyph edges
+  unsharp(img0, w0, h0, 3, 0.9); // wide: ink/background contrast
   ctx0.putImageData(img0, 0, 0);
 
-  const scale = Math.max(1, Math.min(2, 1344 / w0));
+  const scale = Math.max(1, Math.min(3, 2016 / w0));
   const W = Math.round(w0 * scale);
   const H = Math.round(h0 * scale);
   const canvas = document.createElement("canvas");
@@ -1144,7 +1148,8 @@ function enhanceBitmap(bitmap) {
   ctx.drawImage(c0, 0, 0, W, H);
 
   const img = ctx.getImageData(0, 0, W, H);
-  unsharp(img, W, H, 2, 0.6);
+  unsharp(img, W, H, 2, 0.8); // fine, at the upscaled resolution
+  unsharp(img, W, H, 5, 0.5); // wide, to keep strokes solid
   ctx.putImageData(img, 0, 0);
   return canvas;
 }
@@ -1552,20 +1557,22 @@ function drawTokenOverlay(bitmap, tr, hasPT, textless = false) {
   ctx.drawImage(bitmap, 0, 0);
 
   if (tr.name) {
-    paintBarText(ctx, W, tr.name, 0.085 * W, 0.057 * H, 0.915 * W, 0.111 * H, "bold ", true);
+    paintBarText(ctx, W, tr.name, 0.085 * W, 0.050 * H, 0.915 * W, 0.104 * H, "bold ", true);
   }
   if (tr.type) {
-    // Leave the set symbol (right side of the type bar) fully visible
-    const typeY = textless ? [0.812, 0.878] : [0.686, 0.744];
+    // Leave the set symbol (right side of the type bar) fully visible. On
+    // ability tokens the type bar sits higher than the earlier calibration
+    // assumed (the English type line was leaking above the box).
+    const typeY = textless ? [0.812, 0.878] : [0.656, 0.714];
     paintBarText(ctx, W, tr.type, 0.075 * W, typeY[0] * H, 0.84 * W, typeY[1] * H, "bold ");
   }
   if (tr.text && !textless) {
     if (hasPT) {
       // Blank the original text left of the P/T box, keep the P/T visible
       paintPatch(ctx, 0.09 * W, 0.895 * H, 0.77 * W, 0.95 * H);
-      paintTextBox(ctx, W, 0.030 * H, tr.text, 0.085 * W, 0.762 * H, 0.915 * W, 0.905 * H);
+      paintTextBox(ctx, W, 0.030 * H, tr.text, 0.085 * W, 0.722 * H, 0.915 * W, 0.905 * H);
     } else {
-      paintTextBox(ctx, W, 0.030 * H, tr.text, 0.085 * W, 0.762 * H, 0.915 * W, 0.945 * H);
+      paintTextBox(ctx, W, 0.030 * H, tr.text, 0.085 * W, 0.722 * H, 0.915 * W, 0.945 * H);
     }
   }
 
@@ -2384,8 +2391,14 @@ function makeTile(card) {
 
   const imgWrap = document.createElement("div");
   imgWrap.className = "img-wrap";
-  imgWrap.appendChild(badgeEl);
-  imgWrap.appendChild(resEl);
+  // Right-side control stack, top to bottom: version/status badge, HD badge,
+  // then (for double-faced cards) the flip button last. A hidden HD badge
+  // collapses out, so the flip button moves up to fill its slot.
+  const badges = document.createElement("div");
+  badges.className = "card-badges";
+  badges.appendChild(badgeEl);
+  badges.appendChild(resEl);
+  imgWrap.appendChild(badges);
   const img = document.createElement("img");
   img.src = card.faces[0];
   img.alt = card.name;
@@ -2412,7 +2425,8 @@ function makeTile(card) {
     if (hitRegion(e) && await openEditDialog(card, img, tile)) face = 0;
   });
 
-  // Flipping a double-sided card happens only via its icon (below the badge)
+  // Flipping a double-sided card happens only via its icon, last in the
+  // right-side control stack (below the badges).
   if (card.faces.length > 1) {
     const flipBtn = document.createElement("button");
     flipBtn.className = "flip-btn";
@@ -2423,7 +2437,7 @@ function makeTile(card) {
       face = (face + 1) % card.faces.length;
       img.src = card.faces[face];
     });
-    imgWrap.appendChild(flipBtn);
+    badges.appendChild(flipBtn);
   }
   tile.appendChild(imgWrap);
 
@@ -2726,8 +2740,26 @@ async function onGeneratePdf() {
       }
     };
 
+    // Square off the card's rounded corners with black: the scans show the
+    // physical card's rounded corners (against a lighter scan background),
+    // which look ragged after a straight cut. A small black triangle at each
+    // corner covers the rounding, leaving a clean square black corner. The
+    // covered area is only the black card border, so no art/text is lost.
+    const CORNER = 3.2; // mm — matches the ~3 mm card corner radius
+    const blackenCorners = (x, y) => {
+      doc.setFillColor(0, 0, 0);
+      const r = CORNER;
+      doc.triangle(x, y, x + r, y, x, y + r, "F");
+      doc.triangle(x + CARD_W, y, x + CARD_W - r, y, x + CARD_W, y + r, "F");
+      doc.triangle(x, y + CARD_H, x + r, y + CARD_H, x, y + CARD_H - r, "F");
+      doc.triangle(x + CARD_W, y + CARD_H, x + CARD_W - r, y + CARD_H, x + CARD_W, y + CARD_H - r, "F");
+    };
+
+    const perPage = COLS * ROWS;
+    const totalPages = Math.ceil(slots.length / perPage);
+
     slots.forEach((slot, i) => {
-      const posOnPage = i % (COLS * ROWS);
+      const posOnPage = i % perPage;
       if (i > 0 && posOnPage === 0) doc.addPage();
       if (posOnPage === 0) drawCutMarks();
       const col = posOnPage % COLS;
@@ -2736,7 +2768,24 @@ async function onGeneratePdf() {
       const y = MARGIN_Y + row * CARD_H;
       const dataUrl = slot.rotated ? portraitCache.get(slot.url) : slot.url;
       doc.addImage(dataUrl, "JPEG", x, y, CARD_W, CARD_H);
+      blackenCorners(x, y);
     });
+
+    // Thin grey lines between adjacent cards, drawn on top of the images as
+    // a cutting guide (the outer edge is covered by the cut marks above).
+    for (let p = 1; p <= totalPages; p++) {
+      doc.setPage(p);
+      doc.setDrawColor(150);
+      doc.setLineWidth(0.1); // ~1px hairline
+      for (let c = 1; c < COLS; c++) {
+        const x = MARGIN_X + c * CARD_W;
+        doc.line(x, MARGIN_Y, x, MARGIN_Y + ROWS * CARD_H);
+      }
+      for (let r = 1; r < ROWS; r++) {
+        const y = MARGIN_Y + r * CARD_H;
+        doc.line(MARGIN_X, y, MARGIN_X + COLS * CARD_W, y);
+      }
+    }
 
     const safeTitle = (deckTitle || "proxies").replace(/[^\w\s-]/g, "").trim()
       .replace(/\s+/g, "_").toLowerCase() || "proxies";
@@ -2765,4 +2814,12 @@ $("deck-url").addEventListener("input", () => {
   for (const el of document.querySelectorAll(".moxfield-only")) {
     el.classList.toggle("hidden", !isMoxfield);
   }
+});
+
+// Nothing is persisted (no backend, no storage): warn before leaving once a
+// deck has been loaded, so a built-up list isn't lost by accident.
+window.addEventListener("beforeunload", (e) => {
+  if (cards.length === 0 && !emptyDeck) return;
+  e.preventDefault();
+  e.returnValue = ""; // required for the native prompt in some browsers
 });

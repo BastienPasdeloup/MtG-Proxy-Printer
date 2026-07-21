@@ -263,21 +263,30 @@ button.primary.big {
   margin: 0 auto;
 }
 
-/* keep the badge on the (narrower, landscape) card, below its title bar */
-.card-tile.wide .badge {
-  top: 2.5rem;
-  right: calc(5.5% + 0.55rem);
-}
-
 .img-wrap {
   position: relative;
 }
 
-/* flip button sits just below the badge */
-.flip-btn {
+/* Right-side control stack (version badge, HD badge, flip button), below the
+   title bar so the mana cost stays visible. A hidden HD badge collapses out. */
+.card-badges {
   position: absolute;
-  top: 4rem;
+  top: 2.3rem;
   right: 0.55rem;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.4rem;
+}
+
+/* keep the stack on the (narrower, landscape) card */
+.card-tile.wide .card-badges {
+  top: 2.5rem;
+  right: calc(5.5% + 0.55rem);
+}
+
+.flip-btn {
   width: 34px;
   height: 34px;
   border-radius: 50%;
@@ -300,12 +309,6 @@ button.primary.big {
   width: 20px;
   height: 20px;
   fill: currentColor;
-}
-
-/* keep the button on the (narrower, centered) landscape card */
-.card-tile.wide .flip-btn {
-  top: 3.9rem;
-  right: calc(5.5% + 0.55rem);
 }
 
 .card-name {
@@ -359,17 +362,11 @@ button.primary.big {
 }
 
 .badge {
-  position: absolute;
-  top: 2.3rem;
-  /* below the title bar, so the casting cost stays visible */
-  right: 0.55rem;
-  /* same axis as the flip button below it */
-  z-index: 2;
   font-size: 0.7rem;
   font-weight: 700;
   padding: 0.15rem 0.45rem;
   min-width: 34px;
-  /* same width as the flip button */
+  /* same width as the flip button below it in the stack */
   text-align: center;
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.75);
@@ -406,16 +403,9 @@ button.primary.big {
   background: #8a8fa3;
 }
 
-/* resolution badge sits top left, mirroring the language badge */
+/* resolution badge (HD/LR) sits under the version badge in the stack */
 .badge-res {
   background: #7a5ad0;
-  right: auto;
-  left: 0.55rem;
-}
-
-.card-tile.wide .badge-res {
-  right: auto;
-  left: calc(5.5% + 0.55rem);
 }
 
 .add-tile {
