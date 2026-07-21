@@ -1438,27 +1438,38 @@ function drawManaCost(ctx, manaCost, xRight, yCenter, size) {
 }
 
 // Draw the English card, then paint the translated name, type line and
-// rules text over their respective areas of a standard modern frame.
+// rules text over their respective areas of a standard frame.
 // `manaSymbols` = number of mana symbols, kept uncovered in the title bar.
 // `hasPT` shrinks the text box so the power/toughness box stays visible.
-function drawWithOverlay(bitmap, tr, manaSymbols, hasPT) {
+// `frame` is Scryfall's frame year: the pre-modern frames ("1993"/"1997")
+// have a shorter text box and put the P/T in the bottom border (outside the
+// text box), so they get their own geometry and skip the P/T handling.
+function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame) {
   const W = bitmap.width, H = bitmap.height;
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
   ctx.drawImage(bitmap, 0, 0);
+  const old = frame === "1993" || frame === "1997";
 
   if (tr.name) {
-    // Leave the mana cost (right side of the title bar) fully visible
+    // Leave the mana cost (right side of the title bar) fully visible. The
+    // title bar is taller than it looks — extend down so no English shows.
     const x1 = (manaSymbols > 0 ? 0.925 - manaSymbols * 0.052 - 0.012 : 0.93) * W;
-    paintBarText(ctx, W, tr.name, 0.068 * W, 0.048 * H, x1, 0.100 * H, "bold ");
+    const nameY = old ? [0.044, 0.100] : [0.046, 0.108];
+    paintBarText(ctx, W, tr.name, 0.068 * W, nameY[0] * H, x1, nameY[1] * H, "bold ");
   }
   if (tr.type) {
     // Leave the set symbol (right side of the type bar) fully visible
-    paintBarText(ctx, W, tr.type, 0.068 * W, 0.563 * H, 0.845 * W, 0.610 * H, "bold ");
+    const typeY = old ? [0.548, 0.600] : [0.563, 0.610];
+    paintBarText(ctx, W, tr.type, 0.068 * W, typeY[0] * H, 0.845 * W, typeY[1] * H, "bold ");
   }
   if (tr.text) {
-    if (hasPT) {
+    if (old) {
+      // Old frames keep the P/T in the bottom border, outside the text box:
+      // no shrink, no patch — just fill the (shorter) beige box.
+      paintTextBox(ctx, W, 0.032 * H, tr.text, 0.075 * W, 0.606 * H, 0.925 * W, 0.898 * H);
+    } else if (hasPT) {
       // Shrink the box above the P/T (kept visible), and blank the original
       // text bottom left of it with a borderless patch
       paintPatch(ctx, 0.07 * W, 0.868 * H, 0.72 * W, 0.922 * H);
@@ -1879,7 +1890,7 @@ async function buildFaces(entry) {
           faces.push(drawTokenOverlay(bitmap, tr, hasPT, !engFace.oracle_text));
         }
       } else {
-        faces.push(drawWithOverlay(bitmap, tr, mana, hasPT));
+        faces.push(drawWithOverlay(bitmap, tr, mana, hasPT, print.frame));
       }
     } else {
       faces.push(bitmapToDataUrl(bitmap));
