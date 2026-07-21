@@ -1446,7 +1446,7 @@ function drawManaCost(ctx, manaCost, xRight, yCenter, size) {
 // `frame` is Scryfall's frame year: the pre-modern frames ("1993"/"1997")
 // have a shorter text box and put the P/T in the bottom border (outside the
 // text box), so they get their own geometry and skip the P/T handling.
-function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame) {
+function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW) {
   const W = bitmap.width, H = bitmap.height;
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
@@ -1457,20 +1457,29 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame) {
   if (tr.name) {
     // Leave the mana cost (right side of the title bar) fully visible. The
     // title bar is taller than it looks — extend down so no English shows.
+    // Planeswalker names sit a touch higher.
     const x1 = (manaSymbols > 0 ? 0.925 - manaSymbols * 0.052 - 0.012 : 0.93) * W;
-    const nameY = old ? [0.044, 0.100] : [0.046, 0.108];
+    const nameY = isPW ? [0.038, 0.096] : old ? [0.044, 0.100] : [0.046, 0.108];
     paintBarText(ctx, W, tr.name, 0.068 * W, nameY[0] * H, x1, nameY[1] * H, "bold ");
   }
   if (tr.type) {
     // Leave the set symbol (right side of the type bar) fully visible
-    const typeY = old ? [0.548, 0.600] : [0.563, 0.610];
+    const typeY = isPW ? [0.512, 0.562] : old ? [0.548, 0.600] : [0.563, 0.610];
     paintBarText(ctx, W, tr.type, 0.068 * W, typeY[0] * H, 0.845 * W, typeY[1] * H, "bold ");
   }
   if (tr.text) {
     if (old) {
       // Old frames keep the P/T in the bottom border, outside the text box:
-      // no shrink, no patch — just fill the (shorter) beige box.
-      paintTextBox(ctx, W, 0.032 * H, tr.text, 0.075 * W, 0.603 * H, 0.925 * W, 0.892 * H);
+      // no shrink, no patch — just fill the (shorter, narrower) beige box.
+      paintTextBox(ctx, W, 0.032 * H, tr.text, 0.088 * W, 0.603 * H, 0.912 * W, 0.892 * H);
+    } else if (isPW) {
+      // Planeswalker: shrink above the loyalty count (bottom-right) so it
+      // stays visible, and continue the fill down the left strip beside it.
+      const tx0 = 0.07 * W, ty0 = 0.560 * H, tx1 = 0.93 * W, ty1 = 0.878 * H;
+      const boxColor = boxStyle(ctx, tx0, ty0, tx1, ty1).fill;
+      paintTextBox(ctx, W, 0.032 * H, tr.text, tx0, ty0, tx1, ty1);
+      const d = BOX_INSET * W;
+      paintPatch(ctx, tx0 + d, 0.872 * H, 0.78 * W, 0.925 * H - d, boxColor);
     } else if (hasPT) {
       // Shrink the box above the P/T (kept visible), then continue that same
       // fill down the strip left of the P/T box so they read as one panel.
@@ -1482,6 +1491,35 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame) {
     } else {
       paintTextBox(ctx, W, 0.034 * H, tr.text, 0.07 * W, 0.615 * H, 0.93 * W, 0.925 * H);
     }
+  }
+
+  return canvas.toDataURL("image/jpeg", 0.92);
+}
+
+// Sagas: the art is on the right half; the left column holds the reminder
+// text and the chapter abilities (with I/II/III markers), and the type line
+// ("Enchantment — Saga") sits in a bar along the bottom. Region fractions
+// calibrated on Scryfall "large" saga scans. The chapter markers are covered
+// by the text box, but the translated oracle text keeps its "I, II —"/"III —"
+// labels, so the chapters stay identifiable.
+function drawSagaOverlay(bitmap, tr, manaSymbols) {
+  const W = bitmap.width, H = bitmap.height;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(bitmap, 0, 0);
+
+  if (tr.name) {
+    const x1 = (manaSymbols > 0 ? 0.925 - manaSymbols * 0.052 - 0.012 : 0.93) * W;
+    paintBarText(ctx, W, tr.name, 0.068 * W, 0.046 * H, x1, 0.104 * H, "bold ");
+  }
+  if (tr.text) {
+    // Left column: reminder + chapters as one box.
+    paintTextBox(ctx, W, 0.030 * H, tr.text, 0.048 * W, 0.116 * H, 0.475 * W, 0.850 * H);
+  }
+  if (tr.type) {
+    // Type bar along the bottom; leave the set symbol (bottom-right) visible.
+    paintBarText(ctx, W, tr.type, 0.058 * W, 0.856 * H, 0.85 * W, 0.910 * H, "bold ");
   }
 
   return canvas.toDataURL("image/jpeg", 0.92);
@@ -1595,17 +1633,17 @@ function drawTokenOverlay(bitmap, tr, hasPT, textless = false) {
     paintBarText(ctx, W, tr.type, 0.075 * W, typeY[0] * H, 0.84 * W, typeY[1] * H, "bold ");
   }
   if (tr.text && !textless) {
-    const tx0 = 0.085 * W, ty0 = 0.742 * H, tx1 = 0.915 * W;
+    const tx0 = 0.075 * W, ty0 = 0.742 * H, tx1 = 0.925 * W;
     if (hasPT) {
       // Shrink above the P/T box, then continue the same fill down the strip
       // left of it so the two read as one panel (P/T stays visible).
-      const ty1 = 0.900 * H;
+      const ty1 = 0.888 * H;
       const boxColor = boxStyle(ctx, tx0, ty0, tx1, ty1).fill;
-      paintTextBox(ctx, W, 0.030 * H, tr.text, tx0, ty0, tx1, ty1);
+      paintTextBox(ctx, W, 0.032 * H, tr.text, tx0, ty0, tx1, ty1);
       const d = BOX_INSET * W;
-      paintPatch(ctx, tx0 + d, 0.896 * H, 0.77 * W, 0.945 * H - d, boxColor);
+      paintPatch(ctx, tx0 + d, 0.884 * H, 0.77 * W, 0.94 * H - d, boxColor);
     } else {
-      paintTextBox(ctx, W, 0.030 * H, tr.text, tx0, ty0, tx1, 0.942 * H);
+      paintTextBox(ctx, W, 0.032 * H, tr.text, tx0, ty0, tx1, 0.94 * H);
     }
   }
 
@@ -1680,11 +1718,11 @@ function bitmapToDataUrl(bitmap) {
 
 // Layouts whose frame geometry supports the translation overlay: standard
 // frames, split cards (drawn rotated with per-half regions), adventures
-// (two-column text area) and tokens/emblems (M15 token frame). Others
-// (flip, saga, class…) keep the English scan.
+// (two-column text area), sagas (left text column + bottom type bar) and
+// tokens/emblems (M15 token frame). Others (flip, class…) keep the English scan.
 const TOKEN_LAYOUTS = new Set(["token", "double_faced_token", "emblem"]);
 const OVERLAY_LAYOUTS = new Set(["normal", "transform", "modal_dfc", "meld", "split", "adventure",
-  ...TOKEN_LAYOUTS]);
+  "saga", ...TOKEN_LAYOUTS]);
 
 async function buildCardEntry(englishCard, lang, loc, eng, prefPrint, versionMode = "language") {
   const langPrints = lang === "en" ? [] : (loc?.prints || []);
@@ -1891,6 +1929,7 @@ async function buildFaces(entry) {
     if (tr && (tr.name || tr.type || tr.text)) {
       const mana = (printFaces[i]?.mana_cost || "").match(/{[^}]+}/g)?.length || 0;
       const hasPT = engFaces[i]?.power != null;
+      const typeLine = engFaces[i]?.type_line || "";
       if (TOKEN_LAYOUTS.has(entry.english.layout)) {
         const engFace = engFaces[i] || entry.english;
         const geom = HELPER_GEOM[engFace.name];
@@ -1901,8 +1940,11 @@ async function buildFaces(entry) {
         } else {
           faces.push(drawTokenOverlay(bitmap, tr, hasPT, !engFace.oracle_text));
         }
+      } else if (entry.english.layout === "saga") {
+        faces.push(drawSagaOverlay(bitmap, tr, mana));
       } else {
-        faces.push(drawWithOverlay(bitmap, tr, mana, hasPT, print.frame));
+        const isPW = /planeswalker/i.test(typeLine);
+        faces.push(drawWithOverlay(bitmap, tr, mana, hasPT, print.frame, isPW));
       }
     } else {
       faces.push(bitmapToDataUrl(bitmap));
@@ -2381,10 +2423,10 @@ function makeTile(card) {
     img.style.opacity = "0.4";
     try {
       card.faces = await buildFaces(card);
-      img.src = card.faces[0];
+      face = Math.min(face, card.faces.length - 1); // keep the viewed side
+      img.src = card.faces[face];
       card.status = computeStatus(card);
       updateBadge(badgeEl, card);
-      face = 0;
     } catch (e) {
       console.error(e);
       setStatus(`Could not update ${card.name}: ${e.message}`, null, true);
@@ -2531,11 +2573,11 @@ function makeTile(card) {
       img.style.opacity = "0.4";
       try {
         card.faces = await buildFaces(card);
-        img.src = card.faces[0];
+        face = Math.min(face, card.faces.length - 1); // keep the viewed side
+        img.src = card.faces[face];
         card.status = computeStatus(card);
         updateBadge(badgeEl, card);
         updateResBadge(); // the new print may (not) be a low-res scan
-        face = 0;
       } catch (e) {
         console.error(e);
         setStatus(`Could not load that printing of ${card.name}: ${e.message}`, null, true);
@@ -2800,22 +2842,15 @@ async function onGeneratePdf() {
     //   triangle would cover artwork — leave the corners untouched.
     // - white-bordered cards: fill the corners white to match the border.
     // - otherwise (black border): fill them black.
-    const cornerModeOf = (card) => {
-      const print = card.prints[card.printIndex];
-      const fullArt = print.full_art || (print.card_faces || []).some((f) => f.full_art);
-      if (fullArt || print.border_color === "borderless") return "none";
-      if (print.border_color === "white") return "white";
-      return "black";
-    };
-
     // Flatten: each copy of each printed face is one slot. Split cards are
     // stored landscape for display — rotate them back to portrait here.
+    // `white` = white-bordered card (its bottom corners are filled white).
     const slots = [];
     for (const card of cards) {
       const faces = includeBacks ? card.faces : card.faces.slice(0, 1);
-      const corner = cornerModeOf(card);
+      const white = card.prints[card.printIndex].border_color === "white";
       for (let i = 0; i < card.qty; i++) {
-        for (const f of faces) slots.push({ url: f, rotated: !!card.rotated, corner });
+        for (const f of faces) slots.push({ url: f, rotated: !!card.rotated, white });
       }
     }
     const portraitCache = new Map();
@@ -2823,6 +2858,32 @@ async function onGeneratePdf() {
       if (s.rotated && !portraitCache.has(s.url)) {
         portraitCache.set(s.url, await rotateToPortrait(s.url));
       }
+    }
+
+    const CORNER = 3.2; // mm — matches the ~3 mm card corner radius
+
+    // Top corners replicate the card's border right next to that corner
+    // (black, white, or — on full-art frames — the artwork color), sampled
+    // from the placed image; bottom corners are always black (white on
+    // white-bordered cards). Cached per placed image.
+    const cornerColors = new Map();
+    const sampleCorners = async (url) => {
+      const img = new Image();
+      await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+      const w = 200, h = Math.round(200 * img.naturalHeight / img.naturalWidth);
+      const c = document.createElement("canvas"); c.width = w; c.height = h;
+      const cx = c.getContext("2d"); cx.drawImage(img, 0, 0, w, h);
+      const at = (fx, fy) => {
+        const d = cx.getImageData(Math.round(fx * w), Math.round(fy * h), 1, 1).data;
+        return [d[0], d[1], d[2]];
+      };
+      // ~0.7x the corner radius inward, where the border sits next to the corner
+      const rx = 0.7 * CORNER / CARD_W, ry = 0.7 * CORNER / CARD_H;
+      return { tl: at(rx, ry), tr: at(1 - rx, ry) };
+    };
+    for (const s of slots) {
+      const placed = s.rotated ? portraitCache.get(s.url) : s.url;
+      if (!cornerColors.has(placed)) cornerColors.set(placed, await sampleCorners(placed));
     }
 
     const drawCutMarks = () => {
@@ -2841,20 +2902,18 @@ async function onGeneratePdf() {
       }
     };
 
-    // Square off the card's rounded corners: the scans show the physical
-    // card's rounded corners (against a lighter scan background), which look
-    // ragged after a straight cut. A small triangle at each corner covers the
-    // rounding, leaving a clean square corner — colored to match the border
-    // (see cornerModeOf); full-art frames get nothing so art isn't covered.
-    const CORNER = 3.2; // mm — matches the ~3 mm card corner radius
-    const squareCorners = (x, y, mode) => {
-      if (mode === "none") return;
-      doc.setFillColor(mode === "white" ? 255 : 0, mode === "white" ? 255 : 0, mode === "white" ? 255 : 0);
+    // Square off the card's rounded corners so a straight cut looks clean.
+    // Top corners take the sampled border color (so full-art art blends in);
+    // bottom corners are always black, or white on white-bordered cards.
+    const squareCorners = (x, y, placedUrl, white) => {
+      const cc = cornerColors.get(placedUrl) || { tl: [0, 0, 0], tr: [0, 0, 0] };
+      const bottom = white ? [255, 255, 255] : [0, 0, 0];
       const r = CORNER;
-      doc.triangle(x, y, x + r, y, x, y + r, "F");
-      doc.triangle(x + CARD_W, y, x + CARD_W - r, y, x + CARD_W, y + r, "F");
-      doc.triangle(x, y + CARD_H, x + r, y + CARD_H, x, y + CARD_H - r, "F");
-      doc.triangle(x + CARD_W, y + CARD_H, x + CARD_W - r, y + CARD_H, x + CARD_W, y + CARD_H - r, "F");
+      const fill = (rgb) => doc.setFillColor(rgb[0], rgb[1], rgb[2]);
+      fill(cc.tl); doc.triangle(x, y, x + r, y, x, y + r, "F");
+      fill(cc.tr); doc.triangle(x + CARD_W, y, x + CARD_W - r, y, x + CARD_W, y + r, "F");
+      fill(bottom); doc.triangle(x, y + CARD_H, x + r, y + CARD_H, x, y + CARD_H - r, "F");
+      fill(bottom); doc.triangle(x + CARD_W, y + CARD_H, x + CARD_W - r, y + CARD_H, x + CARD_W, y + CARD_H - r, "F");
     };
 
     const perPage = COLS * ROWS;
@@ -2870,7 +2929,7 @@ async function onGeneratePdf() {
       const y = MARGIN_Y + row * CARD_H;
       const dataUrl = slot.rotated ? portraitCache.get(slot.url) : slot.url;
       doc.addImage(dataUrl, "JPEG", x, y, CARD_W, CARD_H);
-      squareCorners(x, y, slot.corner);
+      squareCorners(x, y, dataUrl, slot.white);
     });
 
     // Thin grey lines between adjacent cards, drawn on top of the images as

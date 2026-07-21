@@ -32,9 +32,10 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    are offered).
 5. Click **Generate Proxies** — downloads an A4 PDF with 9 cards per page, each 62 × 87 mm, with cut
    marks, thin grey lines between adjacent cards, and the cards' rounded corners squared off for a
-   clean cut — in black for black-bordered cards, white for white-bordered ones, and left untouched
-   on full-art / borderless frames so no artwork is covered. If the deck contains double-sided cards,
-   you are asked whether to print backs too. Print at **100% scale** (no "fit to page").
+   clean cut. The bottom corners are always black (white on white-bordered cards); the top corners
+   take the color of the border right next to them (black, white, or the artwork's color on full-art
+   frames) so they blend in. If the deck contains double-sided cards, you are asked whether to print
+   backs too. Print at **100% scale** (no "fit to page").
 
 Nothing is stored server-side — the app has no backend and keeps everything in the page, so it warns
 before you leave once a deck is loaded.
@@ -55,10 +56,11 @@ Every card ends up in the chosen language:
   2. official Gatherer translations via api.magicthegathering.io (blue **T** badge),
   3. machine translation — an MtG-aware AI translator (default), Google Translate, Microsoft Translator or MyMemory, selectable in the UI —
      with official type-word vocabulary (orange **MT** badge).
-- Split cards, adventure cards and tokens/emblems get dedicated overlay layouts (split cards are
-  shown rotated). Cards with other non-standard frames (sagas, classes, flip cards…) keep the
-  English scan when no localized print exists (gray **EN** badge) — the overlay geometry would
-  not match.
+- Split cards, adventure cards, planeswalkers, sagas and tokens/emblems get dedicated overlay
+  layouts (split cards are shown rotated; planeswalkers keep their loyalty count visible; sagas
+  translate the reminder and chapter text in the left column). Old (pre-2003) frames get their own
+  geometry too. Cards with other non-standard frames (classes, flip cards…) keep the English scan
+  when no localized print exists (gray **EN** badge) — the overlay geometry would not match.
 
 ## Low-resolution scans
 
