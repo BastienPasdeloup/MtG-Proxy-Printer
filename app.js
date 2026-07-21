@@ -1303,9 +1303,11 @@ function boxStyle(ctx, x0, y0, x1, y1) {
   return { fill, ink: lum < 130 ? "#f3efe6" : "#141210" };
 }
 
-function paintPatch(ctx, x0, y0, x1, y1) {
+// `fill` overrides the sampled color (used to continue the text box's fill
+// into the strip beside the P/T box so the two read as one panel).
+function paintPatch(ctx, x0, y0, x1, y1, fill) {
   logRegion(ctx, x0, y0, x1, y1);
-  const style = boxStyle(ctx, x0, y0, x1, y1);
+  const style = fill ? { fill } : boxStyle(ctx, x0, y0, x1, y1);
   ctx.fillStyle = style.fill; // fully opaque or the English text ghosts through
   ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
   return style;
@@ -1468,12 +1470,15 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame) {
     if (old) {
       // Old frames keep the P/T in the bottom border, outside the text box:
       // no shrink, no patch — just fill the (shorter) beige box.
-      paintTextBox(ctx, W, 0.032 * H, tr.text, 0.075 * W, 0.606 * H, 0.925 * W, 0.898 * H);
+      paintTextBox(ctx, W, 0.032 * H, tr.text, 0.075 * W, 0.603 * H, 0.925 * W, 0.892 * H);
     } else if (hasPT) {
-      // Shrink the box above the P/T (kept visible), and blank the original
-      // text bottom left of it with a borderless patch
-      paintPatch(ctx, 0.07 * W, 0.868 * H, 0.72 * W, 0.922 * H);
-      paintTextBox(ctx, W, 0.034 * H, tr.text, 0.07 * W, 0.615 * H, 0.93 * W, 0.885 * H);
+      // Shrink the box above the P/T (kept visible), then continue that same
+      // fill down the strip left of the P/T box so they read as one panel.
+      const tx0 = 0.07 * W, ty0 = 0.615 * H, tx1 = 0.93 * W, ty1 = 0.885 * H;
+      const boxColor = boxStyle(ctx, tx0, ty0, tx1, ty1).fill;
+      paintTextBox(ctx, W, 0.034 * H, tr.text, tx0, ty0, tx1, ty1);
+      const d = BOX_INSET * W; // match the text box's inset edges
+      paintPatch(ctx, tx0 + d, 0.879 * H, 0.72 * W, 0.925 * H - d, boxColor);
     } else {
       paintTextBox(ctx, W, 0.034 * H, tr.text, 0.07 * W, 0.615 * H, 0.93 * W, 0.925 * H);
     }
@@ -1583,19 +1588,24 @@ function drawTokenOverlay(bitmap, tr, hasPT, textless = false) {
     paintBarText(ctx, W, tr.name, 0.085 * W, 0.050 * H, 0.915 * W, 0.104 * H, "bold ", true);
   }
   if (tr.type) {
-    // Leave the set symbol (right side of the type bar) fully visible. On
-    // ability tokens the type bar sits higher than the earlier calibration
-    // assumed (the English type line was leaking above the box).
-    const typeY = textless ? [0.812, 0.878] : [0.662, 0.722];
+    // Type bar (calibrated on the M15 token frame, which the app prefers).
+    // Textless (vanilla) tokens have a taller art window, so their type bar
+    // sits much lower, just above the P/T box.
+    const typeY = textless ? [0.812, 0.878] : [0.678, 0.735];
     paintBarText(ctx, W, tr.type, 0.075 * W, typeY[0] * H, 0.84 * W, typeY[1] * H, "bold ");
   }
   if (tr.text && !textless) {
+    const tx0 = 0.085 * W, ty0 = 0.742 * H, tx1 = 0.915 * W;
     if (hasPT) {
-      // Blank the original text left of the P/T box, keep the P/T visible
-      paintPatch(ctx, 0.09 * W, 0.895 * H, 0.77 * W, 0.95 * H);
-      paintTextBox(ctx, W, 0.030 * H, tr.text, 0.085 * W, 0.730 * H, 0.915 * W, 0.905 * H);
+      // Shrink above the P/T box, then continue the same fill down the strip
+      // left of it so the two read as one panel (P/T stays visible).
+      const ty1 = 0.900 * H;
+      const boxColor = boxStyle(ctx, tx0, ty0, tx1, ty1).fill;
+      paintTextBox(ctx, W, 0.030 * H, tr.text, tx0, ty0, tx1, ty1);
+      const d = BOX_INSET * W;
+      paintPatch(ctx, tx0 + d, 0.896 * H, 0.77 * W, 0.945 * H - d, boxColor);
     } else {
-      paintTextBox(ctx, W, 0.030 * H, tr.text, 0.085 * W, 0.730 * H, 0.915 * W, 0.945 * H);
+      paintTextBox(ctx, W, 0.030 * H, tr.text, tx0, ty0, tx1, 0.942 * H);
     }
   }
 
@@ -1623,6 +1633,7 @@ const HELPER_NAMES = {
     pt: "Reserva de energia" },
   "The Ring": { fr: "l'Anneau", de: "Der Ring", es: "El Anillo",
     it: "L'Anello", pt: "O Anel", ja: "指輪" },
+  "The Ring Tempts You": { fr: "l'Anneau vous tente" },
 };
 
 const HELPER_GEOM = {
@@ -1633,9 +1644,10 @@ const HELPER_GEOM = {
   "Max Speed":           { bar: [0.056, 0.107], box: null },
   "Energy Reserve":      { bar: [0.056, 0.107], box: null },
   // The Ring emblem (LTR): title bar over the art, then one box for its 4
-  // abilities. The reminder back ("The Ring Tempts You", type Card) is not
-  // listed, so it stays in English.
+  // abilities. The reminder back ("The Ring Tempts You") is all text (no
+  // art), so one box covers its reminder + clarifications.
   "The Ring":            { bar: [0.406, 0.476], box: [0.478, 0.936] },
+  "The Ring Tempts You": { bar: [0.050, 0.132], box: [0.130, 0.918] },
 };
 
 function drawHelperOverlay(bitmap, tr, geom) {
