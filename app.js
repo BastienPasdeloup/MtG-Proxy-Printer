@@ -1307,12 +1307,20 @@ function paintPatch(ctx, x0, y0, x1, y1) {
   return style;
 }
 
+// Framed overlay boxes (name / type bars, text box) are drawn slightly
+// smaller than the region they cover, so a sliver of the original frame's
+// border stays visible around them. The clickable edit region and the text
+// layout still use the full region (the inset is smaller than the text pad).
+const BOX_INSET = 0.008; // fraction of W
+
 function paintParchment(ctx, W, x0, y0, x1, y1) {
   logRegion(ctx, x0, y0, x1, y1);
   const style = boxStyle(ctx, x0, y0, x1, y1);
+  const d = BOX_INSET * W;
+  const ix0 = x0 + d, iy0 = y0 + d, ix1 = x1 - d, iy1 = y1 - d;
   ctx.fillStyle = style.fill; // fully opaque or the English text ghosts through
   ctx.beginPath();
-  ctx.roundRect(x0, y0, x1 - x0, y1 - y0, 0.01 * W);
+  ctx.roundRect(ix0, iy0, Math.max(0, ix1 - ix0), Math.max(0, iy1 - iy0), 0.01 * W);
   ctx.fill();
   return style;
 }
@@ -1563,16 +1571,16 @@ function drawTokenOverlay(bitmap, tr, hasPT, textless = false) {
     // Leave the set symbol (right side of the type bar) fully visible. On
     // ability tokens the type bar sits higher than the earlier calibration
     // assumed (the English type line was leaking above the box).
-    const typeY = textless ? [0.812, 0.878] : [0.656, 0.714];
+    const typeY = textless ? [0.812, 0.878] : [0.662, 0.722];
     paintBarText(ctx, W, tr.type, 0.075 * W, typeY[0] * H, 0.84 * W, typeY[1] * H, "bold ");
   }
   if (tr.text && !textless) {
     if (hasPT) {
       // Blank the original text left of the P/T box, keep the P/T visible
       paintPatch(ctx, 0.09 * W, 0.895 * H, 0.77 * W, 0.95 * H);
-      paintTextBox(ctx, W, 0.030 * H, tr.text, 0.085 * W, 0.722 * H, 0.915 * W, 0.905 * H);
+      paintTextBox(ctx, W, 0.030 * H, tr.text, 0.085 * W, 0.730 * H, 0.915 * W, 0.905 * H);
     } else {
-      paintTextBox(ctx, W, 0.030 * H, tr.text, 0.085 * W, 0.722 * H, 0.915 * W, 0.945 * H);
+      paintTextBox(ctx, W, 0.030 * H, tr.text, 0.085 * W, 0.730 * H, 0.915 * W, 0.945 * H);
     }
   }
 
@@ -1598,6 +1606,8 @@ const HELPER_NAMES = {
   "Energy Reserve": { fr: "Réserve d'énergie", de: "Energiereserve",
     es: "Reserva de energía", it: "Riserva di energia",
     pt: "Reserva de energia" },
+  "The Ring": { fr: "l'Anneau", de: "Der Ring", es: "El Anillo",
+    it: "L'Anello", pt: "O Anel", ja: "指輪" },
 };
 
 const HELPER_GEOM = {
@@ -1607,6 +1617,10 @@ const HELPER_GEOM = {
   "Start Your Engines!": { bar: [0.674, 0.730], box: [0.737, 0.922] },
   "Max Speed":           { bar: [0.056, 0.107], box: null },
   "Energy Reserve":      { bar: [0.056, 0.107], box: null },
+  // The Ring emblem (LTR): title bar over the art, then one box for its 4
+  // abilities. The reminder back ("The Ring Tempts You", type Card) is not
+  // listed, so it stays in English.
+  "The Ring":            { bar: [0.406, 0.476], box: [0.478, 0.936] },
 };
 
 function drawHelperOverlay(bitmap, tr, geom) {
@@ -2378,8 +2392,10 @@ function makeTile(card) {
     img.style.opacity = "0.4";
     try {
       card.faces = await buildFaces(card);
-      img.src = card.faces[0];
-      face = 0;
+      // Keep the side the user is looking at — toggling resolution must not
+      // flip a double-faced card back to its front.
+      face = Math.min(face, card.faces.length - 1);
+      img.src = card.faces[face];
     } catch (e) {
       console.error(e);
       setStatus(`Could not update ${card.name}: ${e.message}`, null, true);
