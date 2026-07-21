@@ -21,6 +21,9 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    was never printed in it (default).
 3. Click **Load Cards** — card images are fetched from [Scryfall](https://scryfall.com) in the chosen language.
    A **+** tile at the end of the grid lets you add extra cards by name (with autocompletion).
+   Adding a card already in the list creates a second entry on a **different printing** (so you get
+   two artworks); if you instead pick a printing another copy already uses, the dropdown flags it
+   (⚠ "already added") and selecting it merges the two copies back into one.
 4. Adjust the deck: remove cards, change quantities, pick another printing from the dropdown
    under each card — it lists the chosen language's printings and the English ones (translated
    on the fly when selected), sorted by release date (double-faced cards flip with the arrows
@@ -28,9 +31,10 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    card to edit its name, type line and text manually (only the fields painted on that card
    are offered).
 5. Click **Generate Proxies** — downloads an A4 PDF with 9 cards per page, each 62 × 87 mm, with cut
-   marks, thin grey lines between adjacent cards, and the cards' rounded corners squared off in black
-   for a clean cut. If the deck contains double-sided cards, you are asked whether to print backs too.
-   Print at **100% scale** (no "fit to page").
+   marks, thin grey lines between adjacent cards, and the cards' rounded corners squared off for a
+   clean cut — in black for black-bordered cards, white for white-bordered ones, and left untouched
+   on full-art / borderless frames so no artwork is covered. If the deck contains double-sided cards,
+   you are asked whether to print backs too. Print at **100% scale** (no "fit to page").
 
 Nothing is stored server-side — the app has no backend and keeps everything in the page, so it warns
 before you leave once a deck is loaded.

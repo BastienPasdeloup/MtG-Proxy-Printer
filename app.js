@@ -285,6 +285,10 @@ const printScore = (c) => {
   return s;
 };
 
+// Identity of a specific printing (language + set + collector number), used
+// to tell whether two grid entries of the same card use the same version.
+const printKey = (p) => `${p.lang}|${p.set}|${p.collector_number}`;
+
 // Find printings of many cards in the requested language with as few API
 // calls as possible: Scryfall's search accepts (oracleid:A or oracleid:B …),
 // so ~18 cards fit in one request instead of one request per card (which
@@ -2461,17 +2465,45 @@ function makeTile(card) {
     const sel = document.createElement("select");
     sel.className = "print-select";
     sel.title = "Choose the printing to use";
-    card.prints.forEach((p, i) => {
+    const opts = card.prints.map((p, i) => {
       const opt = document.createElement("option");
       opt.value = i;
-      const langTag = card.lang !== "en" ? `${p.lang.toUpperCase()} · ` : "";
-      const year = (p.released_at || "").slice(0, 4);
-      opt.textContent = `${langTag}${p.set.toUpperCase()} #${p.collector_number} · ${p.set_name}${year ? ` (${year})` : ""}`;
-      opt.selected = i === card.printIndex;
       sel.appendChild(opt);
+      return opt;
     });
+    // Printings already used by another copy of the same card (a distinct
+    // entry in the grid) are flagged: picking one merges the two copies.
+    const refreshOptions = () => {
+      const sib = new Set();
+      for (const c of cards) {
+        if (c !== card && c.english.oracle_id === card.english.oracle_id) {
+          sib.add(printKey(c.prints[c.printIndex]));
+        }
+      }
+      card.prints.forEach((p, i) => {
+        const langTag = card.lang !== "en" ? `${p.lang.toUpperCase()} · ` : "";
+        const year = (p.released_at || "").slice(0, 4);
+        const dup = sib.has(printKey(p));
+        opts[i].textContent = `${dup ? "⚠ " : ""}${langTag}${p.set.toUpperCase()} #${p.collector_number} · ${p.set_name}${year ? ` (${year})` : ""}${dup ? " — already added (merge)" : ""}`;
+        opts[i].selected = i === card.printIndex;
+      });
+    };
+    refreshOptions();
+    sel.addEventListener("mousedown", refreshOptions); // keep flags fresh when opening
     sel.addEventListener("change", async () => {
-      card.printIndex = Number(sel.value);
+      const chosen = Number(sel.value);
+      // Picking a printing another copy already uses merges the two entries:
+      // drop this one and add its quantity to that copy.
+      const twin = cards.find((c) => c !== card &&
+        c.english.oracle_id === card.english.oracle_id &&
+        printKey(c.prints[c.printIndex]) === printKey(card.prints[chosen]));
+      if (twin) {
+        twin.qty += card.qty;
+        cards = cards.filter((c) => c !== card);
+        renderGrid();
+        return;
+      }
+      card.printIndex = chosen;
       sel.disabled = true;
       img.style.opacity = "0.4";
       try {
@@ -2637,21 +2669,37 @@ async function addCustomCard(name, qty = 1) {
   if (!resp.ok) throw new Error("card not found on Scryfall");
   const englishCard = await resp.json();
 
-  // Already in the list? Just bump the quantity.
-  const existing = cards.find((c) => c.english.oracle_id === englishCard.oracle_id);
-  if (existing) {
-    existing.qty += qty;
-    hideStatus();
-    renderGrid();
-    return;
-  }
-
   const lang = currentLang;
+  const existingEntries = cards.filter((c) => c.english.oracle_id === englishCard.oracle_id);
+
   const loc = lang !== "en"
     ? (await findLocalizedBatch([englishCard.oracle_id], lang)).get(englishCard.oracle_id)
     : undefined;
   const eng = (await findLocalizedBatch([englishCard.oracle_id], "en")).get(englishCard.oracle_id);
   const built = await buildCardEntry(englishCard, lang, loc, eng);
+
+  // Card already in the list: add a SECOND entry only if we can give it a
+  // printing different from every copy already present (so the two show
+  // different artworks). If no distinct version exists, just bump the first.
+  if (existingEntries.length) {
+    const used = new Set(existingEntries.map((c) => printKey(c.prints[c.printIndex])));
+    if (used.has(printKey(built.prints[built.printIndex]))) {
+      const alt = built.prints
+        .map((_, i) => i)
+        .sort((a, b) => printScore(built.prints[a]) - printScore(built.prints[b]))
+        .find((i) => !used.has(printKey(built.prints[i])));
+      if (alt === undefined) {
+        existingEntries[0].qty += qty;
+        hideStatus();
+        renderGrid();
+        return;
+      }
+      built.printIndex = alt;
+      built.faces = await buildFaces(built);
+      built.status = computeStatus(built);
+    }
+  }
+
   // Insert before the token category so display and PDF order match
   const firstToken = cards.findIndex((c) => c.section === "tokens");
   const insertAt = firstToken === -1 ? cards.length : firstToken;
@@ -2724,13 +2772,27 @@ async function onGeneratePdf() {
     const MARGIN_X = (PAGE_W - COLS * CARD_W) / 2; // 12 mm
     const MARGIN_Y = (PAGE_H - ROWS * CARD_H) / 2; // 18 mm
 
+    // Corner treatment depends on the printing's frame:
+    // - full-art / borderless: the art runs to the edge, so adding a corner
+    //   triangle would cover artwork — leave the corners untouched.
+    // - white-bordered cards: fill the corners white to match the border.
+    // - otherwise (black border): fill them black.
+    const cornerModeOf = (card) => {
+      const print = card.prints[card.printIndex];
+      const fullArt = print.full_art || (print.card_faces || []).some((f) => f.full_art);
+      if (fullArt || print.border_color === "borderless") return "none";
+      if (print.border_color === "white") return "white";
+      return "black";
+    };
+
     // Flatten: each copy of each printed face is one slot. Split cards are
     // stored landscape for display — rotate them back to portrait here.
     const slots = [];
     for (const card of cards) {
       const faces = includeBacks ? card.faces : card.faces.slice(0, 1);
+      const corner = cornerModeOf(card);
       for (let i = 0; i < card.qty; i++) {
-        for (const f of faces) slots.push({ url: f, rotated: !!card.rotated });
+        for (const f of faces) slots.push({ url: f, rotated: !!card.rotated, corner });
       }
     }
     const portraitCache = new Map();
@@ -2756,14 +2818,15 @@ async function onGeneratePdf() {
       }
     };
 
-    // Square off the card's rounded corners with black: the scans show the
-    // physical card's rounded corners (against a lighter scan background),
-    // which look ragged after a straight cut. A small black triangle at each
-    // corner covers the rounding, leaving a clean square black corner. The
-    // covered area is only the black card border, so no art/text is lost.
+    // Square off the card's rounded corners: the scans show the physical
+    // card's rounded corners (against a lighter scan background), which look
+    // ragged after a straight cut. A small triangle at each corner covers the
+    // rounding, leaving a clean square corner — colored to match the border
+    // (see cornerModeOf); full-art frames get nothing so art isn't covered.
     const CORNER = 3.2; // mm — matches the ~3 mm card corner radius
-    const blackenCorners = (x, y) => {
-      doc.setFillColor(0, 0, 0);
+    const squareCorners = (x, y, mode) => {
+      if (mode === "none") return;
+      doc.setFillColor(mode === "white" ? 255 : 0, mode === "white" ? 255 : 0, mode === "white" ? 255 : 0);
       const r = CORNER;
       doc.triangle(x, y, x + r, y, x, y + r, "F");
       doc.triangle(x + CARD_W, y, x + CARD_W - r, y, x + CARD_W, y + r, "F");
@@ -2784,7 +2847,7 @@ async function onGeneratePdf() {
       const y = MARGIN_Y + row * CARD_H;
       const dataUrl = slot.rotated ? portraitCache.get(slot.url) : slot.url;
       doc.addImage(dataUrl, "JPEG", x, y, CARD_W, CARD_H);
-      blackenCorners(x, y);
+      squareCorners(x, y, slot.corner);
     });
 
     // Thin grey lines between adjacent cards, drawn on top of the images as
