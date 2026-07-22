@@ -1398,7 +1398,9 @@ function paintBarText(ctx, W, text, x0, y0, x1, y1, style, center = false) {
   const x = center
     ? x0 + pad + Math.max(0, (maxW - ctx.measureText(text).width) / 2)
     : x0 + pad;
-  ctx.fillText(text, x, (y0 + y1) / 2, maxW);
+  // Nudge down ~0.06em: with the "middle" baseline, capital-heavy titles
+  // otherwise render slightly above the true visual center of the bar.
+  ctx.fillText(text, x, (y0 + y1) / 2 + 0.06 * (y1 - y0), maxW);
 }
 
 // Wrapped rules text, shrunk to fit its box, with {X} tokens drawn as
@@ -1452,7 +1454,9 @@ function paintTextBox(ctx, W, baseFontSize, text, x0, y0, x1, y1) {
   ctx.textBaseline = "top";
   const symW = fontSize * 1.02;
   const spaceW = ctx.measureText(" ").width;
-  let y = y0 + pad;
+  // Start close to the box's top edge: the "top" baseline already leaves an
+  // em-gap, so the full `pad` on top makes the text look pushed down.
+  let y = y0 + 0.011 * W;
   for (const line of lines) {
     let x = x0 + pad;
     line.forEach((atom, i) => {
