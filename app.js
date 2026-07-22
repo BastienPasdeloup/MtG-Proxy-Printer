@@ -1407,9 +1407,12 @@ function paintBarText(ctx, W, text, x0, y0, x1, y1, style, center = false) {
 // game symbols (call preloadSymbols() on the text beforehand).
 function paintTextBox(ctx, W, baseFontSize, text, x0, y0, x1, y1) {
   const pad = 0.018 * W;
+  // Rules text sits a little below the box top (like a printed card), rather
+  // than crammed against it — proportional so small boxes get a small margin.
+  const topMargin = 0.08 * (y1 - y0);
   const box = paintParchment(ctx, W, x0, y0, x1, y1);
   const boxW = x1 - x0 - 2 * pad;
-  const boxH = y1 - y0 - 2 * pad;
+  const boxH = y1 - y0 - topMargin - pad;
 
   const atomWidth = (segs, symW) => {
     let w = 0;
@@ -1454,9 +1457,7 @@ function paintTextBox(ctx, W, baseFontSize, text, x0, y0, x1, y1) {
   ctx.textBaseline = "top";
   const symW = fontSize * 1.02;
   const spaceW = ctx.measureText(" ").width;
-  // Start close to the box's top edge: the "top" baseline already leaves an
-  // em-gap, so the full `pad` on top makes the text look pushed down.
-  let y = y0 + 0.011 * W;
+  let y = y0 + topMargin;
   for (const line of lines) {
     let x = x0 + pad;
     line.forEach((atom, i) => {
