@@ -1543,11 +1543,11 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW, pwRows = 3
     } else if (hasPT) {
       // Shrink the box above the P/T (kept visible), then continue that same
       // fill down the strip left of the P/T box so they read as one panel.
-      const tx0 = 0.07 * W, ty0 = 0.626 * H, tx1 = 0.93 * W, ty1 = 0.885 * H;
+      const tx0 = 0.07 * W, ty0 = 0.626 * H, tx1 = 0.93 * W, ty1 = 0.892 * H;
       const boxColor = boxStyle(ctx, tx0, ty0, tx1, ty1).fill;
       paintTextBox(ctx, W, 0.034 * H, tr.text, tx0, ty0, tx1, ty1);
       const d = BOX_INSET * W; // match the text box's inset edges
-      paintPatch(ctx, tx0 + d, 0.879 * H, 0.72 * W, 0.925 * H - d, boxColor);
+      paintPatch(ctx, tx0 + d, 0.886 * H, 0.72 * W, 0.925 * H - d, boxColor);
     } else {
       paintTextBox(ctx, W, 0.034 * H, tr.text, 0.07 * W, 0.626 * H, 0.93 * W, 0.925 * H);
     }
