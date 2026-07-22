@@ -1398,9 +1398,9 @@ function paintBarText(ctx, W, text, x0, y0, x1, y1, style, center = false) {
   const x = center
     ? x0 + pad + Math.max(0, (maxW - ctx.measureText(text).width) / 2)
     : x0 + pad;
-  // Nudge down ~0.06em: with the "middle" baseline, capital-heavy titles
+  // Nudge down ~0.04em: with the "middle" baseline, capital-heavy titles
   // otherwise render slightly above the true visual center of the bar.
-  ctx.fillText(text, x, (y0 + y1) / 2 + 0.06 * (y1 - y0), maxW);
+  ctx.fillText(text, x, (y0 + y1) / 2 + 0.04 * (y1 - y0), maxW);
 }
 
 // Wrapped rules text, shrunk to fit its box, with {X} tokens drawn as
@@ -1507,9 +1507,10 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW, pwRows = 3
   const ctx = canvas.getContext("2d");
   ctx.drawImage(bitmap, 0, 0);
   const old = frame === "1993" || frame === "1997";
-  // Planeswalker type line moves up ~0.06 per ability row beyond 3 (the art
-  // window shrinks as abilities are added): 3 rows → 0.568, 4 rows → 0.508.
-  const pwTypeTop = Math.min(0.62, Math.max(0.45, 0.568 - 0.06 * (pwRows - 3)));
+  // Planeswalker type line moves up as ability rows are added (the art window
+  // shrinks): calibrated so the box covers the printed type bar — 3 rows →
+  // 0.560, 4 rows → 0.494.
+  const pwTypeTop = Math.min(0.62, Math.max(0.44, 0.560 - 0.066 * (pwRows - 3)));
 
   if (tr.name) {
     // Leave the mana cost (right side of the title bar) fully visible. The
@@ -1521,7 +1522,7 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW, pwRows = 3
   }
   if (tr.type) {
     // Leave the set symbol (right side of the type bar) fully visible
-    const typeY = isPW ? [pwTypeTop, pwTypeTop + 0.044] : old ? [0.548, 0.600] : [0.563, 0.610];
+    const typeY = isPW ? [pwTypeTop, pwTypeTop + 0.052] : old ? [0.548, 0.600] : [0.565, 0.624];
     paintBarText(ctx, W, tr.type, 0.068 * W, typeY[0] * H, 0.845 * W, typeY[1] * H, "bold ");
   }
   if (tr.text) {
@@ -1533,7 +1534,7 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW, pwRows = 3
       // Planeswalker: the ability box starts flush below the type line; shrink
       // above the loyalty count (bottom-right) so it stays visible, and
       // continue the fill down the left strip beside it.
-      const tx0 = 0.07 * W, ty0 = (pwTypeTop + 0.044) * H, tx1 = 0.93 * W, ty1 = 0.878 * H;
+      const tx0 = 0.07 * W, ty0 = (pwTypeTop + 0.052) * H, tx1 = 0.93 * W, ty1 = 0.878 * H;
       const boxColor = boxStyle(ctx, tx0, ty0, tx1, ty1).fill;
       paintTextBox(ctx, W, 0.032 * H, tr.text, tx0, ty0, tx1, ty1);
       const d = BOX_INSET * W;
@@ -1541,13 +1542,13 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW, pwRows = 3
     } else if (hasPT) {
       // Shrink the box above the P/T (kept visible), then continue that same
       // fill down the strip left of the P/T box so they read as one panel.
-      const tx0 = 0.07 * W, ty0 = 0.615 * H, tx1 = 0.93 * W, ty1 = 0.885 * H;
+      const tx0 = 0.07 * W, ty0 = 0.626 * H, tx1 = 0.93 * W, ty1 = 0.885 * H;
       const boxColor = boxStyle(ctx, tx0, ty0, tx1, ty1).fill;
       paintTextBox(ctx, W, 0.034 * H, tr.text, tx0, ty0, tx1, ty1);
       const d = BOX_INSET * W; // match the text box's inset edges
       paintPatch(ctx, tx0 + d, 0.879 * H, 0.72 * W, 0.925 * H - d, boxColor);
     } else {
-      paintTextBox(ctx, W, 0.034 * H, tr.text, 0.07 * W, 0.615 * H, 0.93 * W, 0.925 * H);
+      paintTextBox(ctx, W, 0.034 * H, tr.text, 0.07 * W, 0.626 * H, 0.93 * W, 0.925 * H);
     }
   }
 
