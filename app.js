@@ -1496,13 +1496,16 @@ function drawManaCost(ctx, manaCost, xRight, yCenter, size) {
 // `frame` is Scryfall's frame year: the pre-modern frames ("1993"/"1997")
 // have a shorter text box and put the P/T in the bottom border (outside the
 // text box), so they get their own geometry and skip the P/T handling.
-function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW) {
+function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW, pwRows = 3) {
   const W = bitmap.width, H = bitmap.height;
   const canvas = document.createElement("canvas");
   canvas.width = W; canvas.height = H;
   const ctx = canvas.getContext("2d");
   ctx.drawImage(bitmap, 0, 0);
   const old = frame === "1993" || frame === "1997";
+  // Planeswalker type line moves up ~0.06 per ability row beyond 3 (the art
+  // window shrinks as abilities are added): 3 rows → 0.568, 4 rows → 0.508.
+  const pwTypeTop = Math.min(0.62, Math.max(0.45, 0.568 - 0.06 * (pwRows - 3)));
 
   if (tr.name) {
     // Leave the mana cost (right side of the title bar) fully visible. The
@@ -1514,7 +1517,7 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW) {
   }
   if (tr.type) {
     // Leave the set symbol (right side of the type bar) fully visible
-    const typeY = isPW ? [0.508, 0.552] : old ? [0.548, 0.600] : [0.563, 0.610];
+    const typeY = isPW ? [pwTypeTop, pwTypeTop + 0.044] : old ? [0.548, 0.600] : [0.563, 0.610];
     paintBarText(ctx, W, tr.type, 0.068 * W, typeY[0] * H, 0.845 * W, typeY[1] * H, "bold ");
   }
   if (tr.text) {
@@ -1523,10 +1526,10 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW) {
       // no shrink, no patch — just fill the (shorter, narrower) beige box.
       paintTextBox(ctx, W, 0.032 * H, tr.text, 0.088 * W, 0.603 * H, 0.912 * W, 0.892 * H);
     } else if (isPW) {
-      // Planeswalker: the ability box starts below the type line; shrink
+      // Planeswalker: the ability box starts flush below the type line; shrink
       // above the loyalty count (bottom-right) so it stays visible, and
       // continue the fill down the left strip beside it.
-      const tx0 = 0.07 * W, ty0 = 0.552 * H, tx1 = 0.93 * W, ty1 = 0.878 * H;
+      const tx0 = 0.07 * W, ty0 = (pwTypeTop + 0.044) * H, tx1 = 0.93 * W, ty1 = 0.878 * H;
       const boxColor = boxStyle(ctx, tx0, ty0, tx1, ty1).fill;
       paintTextBox(ctx, W, 0.032 * H, tr.text, tx0, ty0, tx1, ty1);
       const d = BOX_INSET * W;
@@ -1995,7 +1998,12 @@ async function buildFaces(entry) {
         faces.push(drawSagaOverlay(bitmap, tr, mana));
       } else {
         const isPW = /planeswalker/i.test(typeLine);
-        faces.push(drawWithOverlay(bitmap, tr, mana, hasPT, print.frame, isPW));
+        // Ability-row count sets where the type line sits (more rows → smaller
+        // art window → higher type line).
+        const pwRows = isPW
+          ? (engFaces[i]?.oracle_text || "").split("\n").filter((s) => s.trim()).length
+          : 0;
+        faces.push(drawWithOverlay(bitmap, tr, mana, hasPT, print.frame, isPW, pwRows));
       }
     } else {
       faces.push(bitmapToDataUrl(bitmap));
