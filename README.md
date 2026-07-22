@@ -70,6 +70,10 @@ the small rules text), **upscaled 3×**, then sharpened again — and flagged wi
 under the language badge. Click the badge to switch back to the original image (**LR**), and again to
 re-enhance it.
 
+Some scans (notably old French dual lands) show the card inset on a solid colored background instead
+of bleeding to the edge; that thin colored border is detected and cropped away so the card fills the
+image (black/white borders and full-art edges are left alone).
+
 ## Technical notes
 
 - Pure static HTML/CSS/JS, no build step, no backend. PDF generation via [jsPDF](https://github.com/parallax/jsPDF).

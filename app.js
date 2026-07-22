@@ -1158,10 +1158,60 @@ function enhanceBitmap(bitmap) {
   return canvas;
 }
 
-// A face image of the selected print, enhanced when only a low-resolution
-// scan exists — unless the user clicked the HD badge to keep the original.
+// Some scans (notably old French dual lands) show the card inset on a solid
+// colored background instead of bleeding to the edge. Detect that thin,
+// uniform, *colored* border and crop it away so the card fills the image
+// (the overlay geometry and PDF corner sampling both assume a full-bleed
+// card). Returns a cropped canvas, or null when there is nothing to crop —
+// black/white/grey borders (sat≈0) and varied full-art edges are left alone.
+function cropBackground(bitmap) {
+  const W = bitmap.width, H = bitmap.height;
+  if (W < 60 || H < 60) return null;
+  const canvas = document.createElement("canvas");
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(bitmap, 0, 0);
+  let D;
+  try { D = ctx.getImageData(0, 0, W, H).data; } catch { return null; }
+  const px = (x, y) => { const i = (y * W + x) * 4; return [D[i], D[i + 1], D[i + 2]]; };
+
+  // Background color = mean of the outermost ring.
+  const ring = [];
+  for (let x = 0; x < W; x += 2) { ring.push(px(x, 0)); ring.push(px(x, H - 1)); }
+  for (let y = 0; y < H; y += 2) { ring.push(px(0, y)); ring.push(px(W - 1, y)); }
+  const bg = [0, 1, 2].map((k) => ring.reduce((s, q) => s + q[k], 0) / ring.length);
+  if (Math.max(...bg) - Math.min(...bg) < 35) return null; // not a colored border
+
+  const T = 110;
+  const close = (q) => Math.abs(q[0] - bg[0]) + Math.abs(q[1] - bg[1]) + Math.abs(q[2] - bg[2]) < T;
+  if (ring.filter(close).length / ring.length < 0.7) return null; // border not one uniform color
+
+  const rowFrac = (y) => { let n = 0, t = 0; for (let x = 0; x < W; x += 2) { t++; if (close(px(x, y))) n++; } return n / t; };
+  const colFrac = (x) => { let n = 0, t = 0; for (let y = 0; y < H; y += 2) { t++; if (close(px(x, y))) n++; } return n / t; };
+  const F = 0.5, LIMx = Math.floor(W * 0.1), LIMy = Math.floor(H * 0.1);
+  let top = 0; while (top < LIMy && rowFrac(top) > F) top++;
+  let bottom = 0; while (bottom < LIMy && rowFrac(H - 1 - bottom) > F) bottom++;
+  let left = 0; while (left < LIMx && colFrac(left) > F) left++;
+  let right = 0; while (right < LIMx && colFrac(W - 1 - right) > F) right++;
+  // If any side ran to the cap the "border" is really content — bail out.
+  if (top >= LIMy || bottom >= LIMy || left >= LIMx || right >= LIMx) return null;
+  const sides = [top, bottom, left, right].filter((v) => v > 3).length;
+  if (sides < 2 || Math.max(top, bottom, left, right) < 4) return null;
+
+  const cw = W - left - right, ch = H - top - bottom;
+  const out = document.createElement("canvas");
+  out.width = cw; out.height = ch;
+  out.getContext("2d").drawImage(bitmap, left, top, cw, ch, 0, 0, cw, ch);
+  return out;
+}
+
+// A face image of the selected print: background cropped away if present,
+// then enhanced when only a low-resolution scan exists — unless the user
+// clicked the HD badge to keep the original.
 async function loadFaceImage(entry, url) {
-  const bitmap = await loadImage(url);
+  let bitmap = await loadImage(url);
+  const cropped = cropBackground(bitmap);
+  if (cropped) { bitmap.close?.(); bitmap = cropped; }
   if (!entry.lowResScan || entry.useOriginalImage) return bitmap;
   const enhanced = enhanceBitmap(bitmap);
   bitmap.close?.();
@@ -1464,7 +1514,7 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW) {
   }
   if (tr.type) {
     // Leave the set symbol (right side of the type bar) fully visible
-    const typeY = isPW ? [0.512, 0.562] : old ? [0.548, 0.600] : [0.563, 0.610];
+    const typeY = isPW ? [0.508, 0.552] : old ? [0.548, 0.600] : [0.563, 0.610];
     paintBarText(ctx, W, tr.type, 0.068 * W, typeY[0] * H, 0.845 * W, typeY[1] * H, "bold ");
   }
   if (tr.text) {
@@ -1473,9 +1523,10 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW) {
       // no shrink, no patch — just fill the (shorter, narrower) beige box.
       paintTextBox(ctx, W, 0.032 * H, tr.text, 0.088 * W, 0.603 * H, 0.912 * W, 0.892 * H);
     } else if (isPW) {
-      // Planeswalker: shrink above the loyalty count (bottom-right) so it
-      // stays visible, and continue the fill down the left strip beside it.
-      const tx0 = 0.07 * W, ty0 = 0.560 * H, tx1 = 0.93 * W, ty1 = 0.878 * H;
+      // Planeswalker: the ability box starts below the type line; shrink
+      // above the loyalty count (bottom-right) so it stays visible, and
+      // continue the fill down the left strip beside it.
+      const tx0 = 0.07 * W, ty0 = 0.552 * H, tx1 = 0.93 * W, ty1 = 0.878 * H;
       const boxColor = boxStyle(ctx, tx0, ty0, tx1, ty1).fill;
       paintTextBox(ctx, W, 0.032 * H, tr.text, tx0, ty0, tx1, ty1);
       const d = BOX_INSET * W;
@@ -1515,7 +1566,7 @@ function drawSagaOverlay(bitmap, tr, manaSymbols) {
   }
   if (tr.text) {
     // Left column: reminder + chapters as one box.
-    paintTextBox(ctx, W, 0.030 * H, tr.text, 0.048 * W, 0.116 * H, 0.475 * W, 0.850 * H);
+    paintTextBox(ctx, W, 0.030 * H, tr.text, 0.048 * W, 0.116 * H, 0.492 * W, 0.850 * H);
   }
   if (tr.type) {
     // Type bar along the bottom; leave the set symbol (bottom-right) visible.
@@ -2844,13 +2895,11 @@ async function onGeneratePdf() {
     // - otherwise (black border): fill them black.
     // Flatten: each copy of each printed face is one slot. Split cards are
     // stored landscape for display — rotate them back to portrait here.
-    // `white` = white-bordered card (its bottom corners are filled white).
     const slots = [];
     for (const card of cards) {
       const faces = includeBacks ? card.faces : card.faces.slice(0, 1);
-      const white = card.prints[card.printIndex].border_color === "white";
       for (let i = 0; i < card.qty; i++) {
-        for (const f of faces) slots.push({ url: f, rotated: !!card.rotated, white });
+        for (const f of faces) slots.push({ url: f, rotated: !!card.rotated });
       }
     }
     const portraitCache = new Map();
@@ -2862,10 +2911,9 @@ async function onGeneratePdf() {
 
     const CORNER = 3.2; // mm — matches the ~3 mm card corner radius
 
-    // Top corners replicate the card's border right next to that corner
-    // (black, white, or — on full-art frames — the artwork color), sampled
-    // from the placed image; bottom corners are always black (white on
-    // white-bordered cards). Cached per placed image.
+    // Each corner replicates the card's border right next to it (black,
+    // white, or — on full-art frames — the artwork color), sampled from the
+    // placed image. Cached per placed image.
     const cornerColors = new Map();
     const sampleCorners = async (url) => {
       const img = new Image();
@@ -2879,7 +2927,7 @@ async function onGeneratePdf() {
       };
       // ~0.7x the corner radius inward, where the border sits next to the corner
       const rx = 0.7 * CORNER / CARD_W, ry = 0.7 * CORNER / CARD_H;
-      return { tl: at(rx, ry), tr: at(1 - rx, ry) };
+      return { tl: at(rx, ry), tr: at(1 - rx, ry), bl: at(rx, 1 - ry), br: at(1 - rx, 1 - ry) };
     };
     for (const s of slots) {
       const placed = s.rotated ? portraitCache.get(s.url) : s.url;
@@ -2903,17 +2951,17 @@ async function onGeneratePdf() {
     };
 
     // Square off the card's rounded corners so a straight cut looks clean.
-    // Top corners take the sampled border color (so full-art art blends in);
-    // bottom corners are always black, or white on white-bordered cards.
-    const squareCorners = (x, y, placedUrl, white) => {
-      const cc = cornerColors.get(placedUrl) || { tl: [0, 0, 0], tr: [0, 0, 0] };
-      const bottom = white ? [255, 255, 255] : [0, 0, 0];
+    // Every corner takes the sampled border color right next to it, so black
+    // borders get black, white borders white, and full-art art blends in.
+    const squareCorners = (x, y, placedUrl) => {
+      const cc = cornerColors.get(placedUrl) ||
+        { tl: [0, 0, 0], tr: [0, 0, 0], bl: [0, 0, 0], br: [0, 0, 0] };
       const r = CORNER;
       const fill = (rgb) => doc.setFillColor(rgb[0], rgb[1], rgb[2]);
       fill(cc.tl); doc.triangle(x, y, x + r, y, x, y + r, "F");
       fill(cc.tr); doc.triangle(x + CARD_W, y, x + CARD_W - r, y, x + CARD_W, y + r, "F");
-      fill(bottom); doc.triangle(x, y + CARD_H, x + r, y + CARD_H, x, y + CARD_H - r, "F");
-      fill(bottom); doc.triangle(x + CARD_W, y + CARD_H, x + CARD_W - r, y + CARD_H, x + CARD_W, y + CARD_H - r, "F");
+      fill(cc.bl); doc.triangle(x, y + CARD_H, x + r, y + CARD_H, x, y + CARD_H - r, "F");
+      fill(cc.br); doc.triangle(x + CARD_W, y + CARD_H, x + CARD_W - r, y + CARD_H, x + CARD_W, y + CARD_H - r, "F");
     };
 
     const perPage = COLS * ROWS;
@@ -2929,7 +2977,7 @@ async function onGeneratePdf() {
       const y = MARGIN_Y + row * CARD_H;
       const dataUrl = slot.rotated ? portraitCache.get(slot.url) : slot.url;
       doc.addImage(dataUrl, "JPEG", x, y, CARD_W, CARD_H);
-      squareCorners(x, y, dataUrl, slot.white);
+      squareCorners(x, y, dataUrl);
     });
 
     // Thin grey lines between adjacent cards, drawn on top of the images as
