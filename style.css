@@ -29,11 +29,16 @@ header {
   padding: 2rem 1rem 1rem;
 }
 
-#gh-star {
+#gh-links {
   position: fixed;
   top: 0.85rem;
   right: 0.85rem;
   z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.gh-btn {
   display: inline-flex;
   align-items: center;
   gap: 0.4rem;
@@ -48,19 +53,19 @@ header {
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   transition: background 0.15s, border-color 0.15s, transform 0.15s;
 }
-#gh-star:hover {
+.gh-btn:hover {
   background: var(--panel);
   border-color: var(--accent);
   transform: translateY(-1px);
 }
-#gh-star svg {
+.gh-btn svg {
   width: 16px;
   height: 16px;
   fill: var(--accent);
 }
 @media (max-width: 560px) {
-  #gh-star span { display: none; }
-  #gh-star { padding: 0.45rem; }
+  .gh-btn span { display: none; }
+  .gh-btn { padding: 0.45rem; }
 }
 
 header h1 {
