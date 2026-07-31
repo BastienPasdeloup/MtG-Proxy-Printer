@@ -1369,9 +1369,14 @@ function paintPatch(ctx, x0, y0, x1, y1, fill) {
 // layout still use the full region (the inset is smaller than the text pad).
 const BOX_INSET = 0.008; // fraction of W
 
-function paintParchment(ctx, W, x0, y0, x1, y1) {
+// `sampleY0` overrides the top of the color-sampling region (not the fill):
+// old-frame name bars sit right against the outer border, and sampling the
+// full box would let that uniform border (black or white) win the modal color
+// vote and tint the box the wrong shade. Sampling only the lower half keeps
+// the fill matched to the frame background it covers.
+function paintParchment(ctx, W, x0, y0, x1, y1, sampleY0 = null) {
   logRegion(ctx, x0, y0, x1, y1);
-  const style = boxStyle(ctx, x0, y0, x1, y1);
+  const style = boxStyle(ctx, x0, sampleY0 == null ? y0 : sampleY0, x1, y1);
   const d = BOX_INSET * W;
   const ix0 = x0 + d, iy0 = y0 + d, ix1 = x1 - d, iy1 = y1 - d;
   ctx.fillStyle = style.fill; // fully opaque or the English text ghosts through
@@ -1383,8 +1388,8 @@ function paintParchment(ctx, W, x0, y0, x1, y1) {
 
 // Single line, shrunk to fit, vertically centered in its bar
 // (horizontally centered too with `center` — token frames center the name)
-function paintBarText(ctx, W, text, x0, y0, x1, y1, style, center = false) {
-  const box = paintParchment(ctx, W, x0, y0, x1, y1);
+function paintBarText(ctx, W, text, x0, y0, x1, y1, style, center = false, sampleY0 = null) {
+  const box = paintParchment(ctx, W, x0, y0, x1, y1, sampleY0);
   const pad = 0.015 * W;
   const maxW = x1 - x0 - 2 * pad;
   let size = (y1 - y0) * 0.62;
@@ -1518,13 +1523,18 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW, pwRows = 3
     // title bar is taller than it looks — extend down so no English shows.
     // Planeswalker names sit a touch higher.
     const x1 = (manaSymbols > 0 ? 0.925 - manaSymbols * 0.052 - 0.012 : 0.93) * W;
-    // Old frames (esp. artifacts, whose name sits on the dark border rather
-    // than a plate) print the name high and its exact height varies by print
-    // (4ED cap-tops reach ~0.035, Masters Ed ~0.046). Center the box on the
-    // name (~0.054) and start it well above the highest cap so no letter tops
-    // peek out on any print, while staying below the outer border (~0.020).
-    const nameY = isPW ? [0.038, 0.096] : old ? [0.024, 0.084] : [0.046, 0.108];
-    paintBarText(ctx, W, tr.name, 0.068 * W, nameY[0] * H, x1, nameY[1] * H, "bold ");
+    // Old frames (esp. artifacts, whose name sits on the border rather than a
+    // plate) print the name high, and its exact height varies by print (4ED
+    // cap-tops reach ~0.035, Masters Ed ~0.046). Set the box top so the painted
+    // edge (after the inset) lands ~0.032 — high enough to cover the highest
+    // cap, low enough to barely touch the outer border. On old frames also
+    // sample the fill color from the box's lower half so the outer border
+    // (black or white) doesn't hijack the box's color (see paintParchment).
+    const nameY = isPW ? [0.038, 0.096] : old ? [0.026, 0.084] : [0.046, 0.108];
+    const nameSampleY0 = old && !isPW
+      ? (nameY[0] + 0.45 * (nameY[1] - nameY[0])) * H
+      : null;
+    paintBarText(ctx, W, tr.name, 0.068 * W, nameY[0] * H, x1, nameY[1] * H, "bold ", false, nameSampleY0);
   }
   if (tr.type) {
     // Leave the set symbol (right side of the type bar) fully visible. On old
