@@ -1524,13 +1524,15 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW, pwRows = 3
     // Planeswalker names sit a touch higher.
     const x1 = (manaSymbols > 0 ? 0.925 - manaSymbols * 0.052 - 0.012 : 0.93) * W;
     // Old frames (esp. artifacts, whose name sits on the border rather than a
-    // plate) print the name high, and its exact height varies by print (4ED
-    // cap-tops reach ~0.035, Masters Ed ~0.046). Set the box top so the painted
-    // edge (after the inset) lands ~0.032 — high enough to cover the highest
-    // cap, low enough to barely touch the outer border. On old frames also
-    // sample the fill color from the box's lower half so the outer border
-    // (black or white) doesn't hijack the box's color (see paintParchment).
-    const nameY = isPW ? [0.038, 0.096] : old ? [0.026, 0.084] : [0.046, 0.108];
+    // plate) print the name high, just inside the outer border. Across prints
+    // the black border ends ~0.039, the frame's bright top edge line sits at
+    // ~0.040, and the name cap-tops start ~0.044 (4ED) to ~0.050 (classic).
+    // Set the box top so the painted edge (after the ~0.006 inset) lands ~0.042
+    // — below the border and frame line so neither is covered, above the name
+    // caps so no English peeks. On old frames also sample the fill color from
+    // the box's lower half so the outer border (black or white) doesn't hijack
+    // the box's color (see paintParchment).
+    const nameY = isPW ? [0.038, 0.096] : old ? [0.036, 0.088] : [0.046, 0.108];
     const nameSampleY0 = old && !isPW
       ? (nameY[0] + 0.45 * (nameY[1] - nameY[0])) * H
       : null;
