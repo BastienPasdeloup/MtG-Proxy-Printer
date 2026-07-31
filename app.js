@@ -1518,19 +1518,30 @@ function drawWithOverlay(bitmap, tr, manaSymbols, hasPT, frame, isPW, pwRows = 3
     // title bar is taller than it looks — extend down so no English shows.
     // Planeswalker names sit a touch higher.
     const x1 = (manaSymbols > 0 ? 0.925 - manaSymbols * 0.052 - 0.012 : 0.93) * W;
-    const nameY = isPW ? [0.038, 0.096] : old ? [0.044, 0.100] : [0.046, 0.108];
+    // Old frames (esp. artifacts, whose name sits on the dark border rather
+    // than a plate) print the name high and its exact height varies by print
+    // (4ED cap-tops reach ~0.035, Masters Ed ~0.046). Center the box on the
+    // name (~0.054) and start it well above the highest cap so no letter tops
+    // peek out on any print, while staying below the outer border (~0.020).
+    const nameY = isPW ? [0.038, 0.096] : old ? [0.024, 0.084] : [0.046, 0.108];
     paintBarText(ctx, W, tr.name, 0.068 * W, nameY[0] * H, x1, nameY[1] * H, "bold ");
   }
   if (tr.type) {
-    // Leave the set symbol (right side of the type bar) fully visible
+    // Leave the set symbol (right side of the type bar) fully visible. On old
+    // frames the expansion symbol sits further left than on the modern frame,
+    // so pull the type box's right edge in more to avoid covering it.
     const typeY = isPW ? [pwTypeTop, pwTypeTop + 0.052] : old ? [0.548, 0.600] : [0.565, 0.624];
-    paintBarText(ctx, W, tr.type, 0.068 * W, typeY[0] * H, 0.845 * W, typeY[1] * H, "bold ");
+    const typeX1 = (old && !isPW ? 0.80 : 0.845) * W;
+    paintBarText(ctx, W, tr.type, 0.068 * W, typeY[0] * H, typeX1, typeY[1] * H, "bold ");
   }
   if (tr.text) {
     if (old) {
       // Old frames keep the P/T in the bottom border, outside the text box:
       // no shrink, no patch — just fill the (shorter, narrower) beige box.
-      paintTextBox(ctx, W, 0.032 * H, tr.text, 0.088 * W, 0.603 * H, 0.912 * W, 0.892 * H);
+      // Keep the fill well inside the printed beige box (interior ~0.12–0.88 W
+      // depending on print) so no parchment spills onto the surrounding frame
+      // border. The 0.008 W inset pulls the painted edges in a touch further.
+      paintTextBox(ctx, W, 0.032 * H, tr.text, 0.118 * W, 0.603 * H, 0.882 * W, 0.892 * H);
     } else if (isPW) {
       // Planeswalker: the ability box starts flush below the type line; shrink
       // above the loyalty count (bottom-right) so it stays visible, and
