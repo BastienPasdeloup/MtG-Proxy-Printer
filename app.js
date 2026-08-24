@@ -164,6 +164,46 @@ async function loadMoxfield(url) {
   return { title: data.name || t("deck.moxfield"), entries, sortByType: true };
 }
 
+// Archidekt exposes the whole deck as JSON (no CORS headers for us, so it
+// goes through the proxies like Moxfield). Boards are expressed as card
+// "categories": the deck lists them with an `includedInDeck` flag, the
+// premier one is the commander category, and the built-in "Sideboard" /
+// "Maybeboard" names map to our sideboard / considering boards. Categories
+// are also used as plain tags (a user category with includedInDeck: false
+// such as "owned" sits on regular deck cards), so only the built-in
+// Maybeboard actually pulls a card out of the deck.
+async function loadArchidekt(url) {
+  const m = url.match(/archidekt\.com\/(?:decks|api\/decks)\/(\d+)/i);
+  if (!m) throw new Error(t("err.archidektid"));
+  const data = await fetchWithProxies(`https://archidekt.com/api/decks/${m[1]}/`, { json: true });
+
+  const premier = new Set((data.categories || [])
+    .filter((c) => c.isPremier).map((c) => c.name));
+  const sectionOf = (names) => {
+    if (names.some((n) => premier.has(n))) return "commander";
+    if (names.some((n) => /^maybeboard$/i.test(n))) return "maybeboard";
+    if (names.some((n) => /^sideboard$/i.test(n))) return "sideboard";
+    return "mainboard";
+  };
+
+  const entries = [];
+  for (const item of data.cards || []) {
+    const card = item.card || {};
+    const name = card.oracleCard?.name;
+    if (!name) continue;
+    // Remember the exact printing chosen on the Archidekt page
+    const set = card.edition?.editioncode;
+    const print = set
+      ? { set: String(set).toLowerCase(), cn: String(card.collectorNumber ?? "") }
+      : null;
+    entries.push({
+      name, qty: item.quantity || 1, section: sectionOf(item.categories || []), print,
+    });
+  }
+  if (entries.length === 0) throw new Error(t("err.archidektempty"));
+  return { title: data.name || t("deck.archidekt"), entries, sortByType: true };
+}
+
 // The event page's document title is "Archetype - Player @ mtgtop8.com";
 // the archetype (the entry selected in the left listing) is what we want.
 async function fetchMtgTop8Title(eventUrl) {
@@ -204,6 +244,7 @@ async function loadDecklist() {
   let deck = null;
   if (url) {
     if (/moxfield\.com/i.test(url)) deck = await loadMoxfield(url);
+    else if (/archidekt\.com/i.test(url)) deck = await loadArchidekt(url);
     else if (/mtgtop8\.com/i.test(url)) deck = await loadMtgTop8(url);
     else throw new Error(t("err.url"));
   }
@@ -1823,7 +1864,7 @@ async function buildCardEntry(englishCard, lang, loc, eng, prefPrint, versionMod
   // Default print selection. With a deck-page printing (Moxfield):
   // - "language" mode: that printing in the chosen language, else any print
   //   in the chosen language, else that printing in English (overlay).
-  // - "moxfield" mode: that printing in the chosen language (same artwork),
+  // - "source" mode: that printing in the chosen language (same artwork),
   //   else that printing in English (overlay).
   // Without a preferred printing: best print in the language, else English.
   const bestOf = (pool) => pool.slice().sort((a, b) => printScore(a) - printScore(b))[0];
@@ -3062,18 +3103,29 @@ $("generate-btn").addEventListener("click", onGeneratePdf);
 $("deck-url").addEventListener("keydown", (e) => {
   if (e.key === "Enter") onLoadCards();
 });
-// The "Considering" board and version preference only exist on Moxfield
+// The "Considering" board and the version preference only mean something for
+// sources that expose a maybeboard and the exact printing of each card.
 $("deck-url").addEventListener("input", () => {
-  const isMoxfield = /moxfield\.com/i.test($("deck-url").value);
-  for (const el of document.querySelectorAll(".moxfield-only")) {
-    el.classList.toggle("hidden", !isMoxfield);
+  const rich = /moxfield\.com|archidekt\.com/i.test($("deck-url").value);
+  for (const el of document.querySelectorAll(".rich-source-only")) {
+    el.classList.toggle("hidden", !rich);
   }
 });
+
+// The card language defaults to the interface language, and keeps following
+// it until the user picks a card language explicitly.
+let cardLangPinned = false;
+$("language").addEventListener("change", () => { cardLangPinned = true; });
+const syncCardLang = () => {
+  if (!cardLangPinned) $("language").value = uiLang;
+};
+syncCardLang();
 
 // Switching the interface language (flag picker in the top-right corner):
 // i18n.js retranslates the static markup, the grid is rebuilt here because
 // its tiles, section labels and tooltips are created in JS.
 document.addEventListener("uilangchange", () => {
+  syncCardLang();
   if (cards.length || emptyDeck) renderGrid();
 });
 

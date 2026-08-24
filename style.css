@@ -136,6 +136,12 @@ main {
   padding: 1rem;
 }
 
+/* The last panel's bottom margin would add to the footer's own padding:
+   drop it so the gap above the footer matches the one under the header. */
+main > :last-child {
+  margin-bottom: 0;
+}
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -431,8 +437,10 @@ button.primary.big {
 
 .legend .badge {
   position: static;
-  margin-right: 0.4rem;
-  min-width: 0;
+  flex: none;
+  /* wide enough for the two-letter badges, so every explanation starts on
+     the same column */
+  min-width: 2.3rem;
 }
 
 .badge-click {
@@ -559,6 +567,19 @@ button.primary.big {
   color: var(--muted);
 }
 
+/* Badge column: every badge takes the same width so the explanations line
+   up, and a wrapped explanation stays inside its own column. */
+.legend ul.badge-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+}
+
+.legend ul.notes {
+  padding-left: 1.15rem;
+  list-style: disc;
+}
+
 .legend h3 {
   margin: 0;
   font-size: 1rem;
@@ -606,7 +627,7 @@ footer {
   text-align: center;
   color: var(--muted);
   font-size: 0.75rem;
-  padding: 2rem 1rem;
+  padding: 1rem 1rem 1.5rem;
   max-width: 800px;
   margin: 0 auto;
 }

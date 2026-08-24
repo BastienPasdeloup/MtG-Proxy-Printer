@@ -14,8 +14,8 @@
 <body>
   <nav id="gh-links">
     <div id="ui-lang">
-      <button type="button" id="ui-lang-btn" class="gh-btn" data-i18n-title="nav.uilang.title"
-        aria-haspopup="listbox" aria-controls="ui-lang-menu">
+      <button type="button" id="ui-lang-btn" class="gh-btn" data-i18n-title="nav.uilang.title" aria-haspopup="listbox"
+        aria-controls="ui-lang-menu">
         <span id="ui-lang-flag" class="flag">🇬🇧</span>
         <span id="ui-lang-short">EN</span>
       </button>
@@ -49,8 +49,8 @@
     <section class="panel" id="controls">
       <div class="control-row">
         <label for="deck-url"><span data-i18n="ctrl.deckurl">Decklist URL</span> <span class="hint"
-            data-i18n="ctrl.deckurl.hint">(Moxfield or MTGTop8)</span></label>
-        <input type="url" id="deck-url" placeholder="https://moxfield.com/decks/… or https://mtgtop8.com/event?e=…&d=…">
+            data-i18n="ctrl.deckurl.hint">(Moxfield, Archidekt or MTGTop8)</span></label>
+        <input type="url" id="deck-url" placeholder="https://…">
       </div>
 
       <details id="paste-fallback">
@@ -85,11 +85,11 @@
             <option value="mymemory" data-i18n="opt.mymemory" data-stars="★★☆|★☆☆">MyMemory</option>
           </select>
         </div>
-        <div id="version-wrap" class="hidden moxfield-only">
+        <div id="version-wrap" class="hidden rich-source-only">
           <label for="preferred-version" data-i18n="ctrl.version">Preferred version</label>
           <select id="preferred-version">
-            <option value="moxfield" data-i18n="opt.version.moxfield">As on Moxfield (same artworks, more translated
-              cards)</option>
+            <option value="source" data-i18n="opt.version.source">As on the deck page (same artworks, more
+              translated cards)</option>
             <option value="language" selected data-i18n="opt.version.language">Chosen language (more alternate artworks,
               fewer translated cards)</option>
           </select>
@@ -103,7 +103,7 @@
             <option value="no" data-i18n="opt.exclude">Exclude</option>
           </select>
         </div>
-        <div id="maybeboard-wrap" class="hidden moxfield-only">
+        <div id="maybeboard-wrap" class="hidden rich-source-only">
           <label for="include-maybeboard" data-i18n="ctrl.maybeboard">Considering</label>
           <select id="include-maybeboard">
             <option value="no" data-i18n="opt.exclude">Exclude</option>
@@ -144,7 +144,7 @@
 
     <section class="panel legend">
       <h3 data-i18n="legend.title">Legend</h3>
-      <ul>
+      <ul class="badge-list">
         <li><span class="badge badge-localized">✓</span> <span data-i18n="legend.localized">Card found in the chosen
             language.</span></li>
         <li><span class="badge badge-overlay">T</span> <span data-i18n="legend.overlay">No usable scan in the chosen
@@ -156,7 +156,7 @@
             quality — Click the badge to switch back to the original image (<strong>LR</strong>).</span></li>
       </ul>
       <h3 data-i18n="legend.notes">Additional notes</h3>
-      <ul>
+      <ul class="notes">
         <li data-i18n-html="legend.note.badge">Click a <strong>T</strong>/<strong>MT</strong> badge to keep the English
           text instead (click again to restore the translation).</li>
         <li data-i18n="legend.note.edit">Translated cards can be manually edited by clicking on the translated text.
