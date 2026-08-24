@@ -13,45 +13,55 @@
 
 <body>
   <nav id="gh-links">
+    <div id="ui-lang">
+      <button type="button" id="ui-lang-btn" class="gh-btn" data-i18n-title="nav.uilang.title"
+        aria-haspopup="listbox" aria-controls="ui-lang-menu">
+        <span id="ui-lang-flag" class="flag">🇬🇧</span>
+        <span id="ui-lang-short">EN</span>
+      </button>
+      <ul id="ui-lang-menu" class="hidden" role="listbox"></ul>
+    </div>
     <a class="gh-btn" href="https://github.com/BastienPasdeloup/MtG-Proxy-Printer/issues/new" target="_blank"
-      rel="noopener" title="Found a bug or have a suggestion? Report it on GitHub!">
+      rel="noopener" data-i18n-title="nav.report.title">
       <svg viewBox="0 0 16 16" aria-hidden="true">
         <path d="M8 9.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"></path>
         <path d="M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0ZM1.5 8a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Z"></path>
       </svg>
-      <span>Report issue</span>
+      <span data-i18n="nav.report">Report issue</span>
     </a>
     <a class="gh-btn" href="https://github.com/BastienPasdeloup/MtG-Proxy-Printer" target="_blank" rel="noopener"
-      title="Like this project? Please leave a star on GitHub!">
+      data-i18n-title="nav.star.title">
       <svg viewBox="0 0 16 16" aria-hidden="true">
         <path
           d="M8 .25a.75.75 0 0 1 .673.418l1.882 3.815 4.21.612a.75.75 0 0 1 .416 1.279l-3.046 2.97.719 4.192a.75.75 0 0 1-1.088.791L8 12.347l-3.766 1.98a.75.75 0 0 1-1.088-.79l.72-4.194L.818 6.374a.75.75 0 0 1 .416-1.28l4.21-.611L7.327.668A.75.75 0 0 1 8 .25Z">
         </path>
       </svg>
-      <span>Star on GitHub</span>
+      <span data-i18n="nav.star">Star on GitHub</span>
     </a>
   </nav>
   <header>
     <h1>🃏 MtG Proxy Printer</h1>
-    <p class="subtitle">Load a decklist, pick a language, print proxies (9 per A4 page, 62&nbsp;×&nbsp;87&nbsp;mm)</p>
+    <p class="subtitle" data-i18n="header.subtitle">Load a decklist, pick a language, print proxies (9 per A4 page,
+      62&nbsp;×&nbsp;87&nbsp;mm)</p>
   </header>
 
   <main>
     <section class="panel" id="controls">
       <div class="control-row">
-        <label for="deck-url">Decklist URL <span class="hint">(Moxfield or MTGTop8)</span></label>
+        <label for="deck-url"><span data-i18n="ctrl.deckurl">Decklist URL</span> <span class="hint"
+            data-i18n="ctrl.deckurl.hint">(Moxfield or MTGTop8)</span></label>
         <input type="url" id="deck-url" placeholder="https://moxfield.com/decks/… or https://mtgtop8.com/event?e=…&d=…">
       </div>
 
       <details id="paste-fallback">
-        <summary>…and/or paste a decklist manually</summary>
+        <summary data-i18n="ctrl.paste">…and/or paste a decklist manually</summary>
         <textarea id="deck-text" rows="8"
           placeholder="4 Lightning Bolt&#10;2 Counterspell&#10;&#10;Sideboard&#10;2 Duress"></textarea>
       </details>
 
       <div class="control-row inline">
         <div>
-          <label for="language">Language</label>
+          <label for="language" data-i18n="ctrl.cardlang">Card language</label>
           <select id="language">
             <option value="en">English</option>
             <option value="fr">Français</option>
@@ -67,47 +77,49 @@
           </select>
         </div>
         <div>
-          <label for="translator">Translator</label>
+          <label for="translator" data-i18n="ctrl.translator">Translator</label>
           <select id="translator">
-            <option value="ai" selected>MtG-aware AI [speed ★☆☆ / quality ★★★]</option>
-            <option value="google">Google Translate [speed ★★★ / quality ★★☆]</option>
-            <option value="bing">Microsoft Translator [speed ★★★ / quality ★☆☆]</option>
-            <option value="mymemory">MyMemory [speed ★★☆ / quality ★☆☆]</option>
+            <option value="ai" selected data-i18n="opt.ai" data-stars="★☆☆|★★★">MtG-aware AI</option>
+            <option value="google" data-i18n="opt.google" data-stars="★★★|★★☆">Google Translate</option>
+            <option value="bing" data-i18n="opt.bing" data-stars="★★★|★☆☆">Microsoft Translator</option>
+            <option value="mymemory" data-i18n="opt.mymemory" data-stars="★★☆|★☆☆">MyMemory</option>
           </select>
         </div>
         <div id="version-wrap" class="hidden moxfield-only">
-          <label for="preferred-version">Preferred version</label>
+          <label for="preferred-version" data-i18n="ctrl.version">Preferred version</label>
           <select id="preferred-version">
-            <option value="moxfield">As on Moxfield (same artworks, more translated cards)</option>
-            <option value="language" selected>Chosen language (more alternate artworks, fewer translated cards)</option>
+            <option value="moxfield" data-i18n="opt.version.moxfield">As on Moxfield (same artworks, more translated
+              cards)</option>
+            <option value="language" selected data-i18n="opt.version.language">Chosen language (more alternate artworks,
+              fewer translated cards)</option>
           </select>
         </div>
       </div>
       <div class="control-row inline">
         <div>
-          <label for="include-sideboard">Sideboard</label>
+          <label for="include-sideboard" data-i18n="ctrl.sideboard">Sideboard</label>
           <select id="include-sideboard">
-            <option value="yes">Include</option>
-            <option value="no">Exclude</option>
+            <option value="yes" data-i18n="opt.include">Include</option>
+            <option value="no" data-i18n="opt.exclude">Exclude</option>
           </select>
         </div>
         <div id="maybeboard-wrap" class="hidden moxfield-only">
-          <label for="include-maybeboard">Considering</label>
+          <label for="include-maybeboard" data-i18n="ctrl.maybeboard">Considering</label>
           <select id="include-maybeboard">
-            <option value="no">Exclude</option>
-            <option value="yes">Include</option>
+            <option value="no" data-i18n="opt.exclude">Exclude</option>
+            <option value="yes" data-i18n="opt.include">Include</option>
           </select>
         </div>
         <div>
-          <label for="include-tokens">Tokens</label>
+          <label for="include-tokens" data-i18n="ctrl.tokens">Tokens</label>
           <select id="include-tokens">
-            <option value="no">Exclude</option>
-            <option value="yes">Include</option>
+            <option value="no" data-i18n="opt.exclude">Exclude</option>
+            <option value="yes" data-i18n="opt.include">Include</option>
           </select>
         </div>
       </div>
       <div class="control-row">
-        <button id="load-btn" class="primary">Load Cards</button>
+        <button id="load-btn" class="primary" data-i18n="btn.load">Load Cards</button>
       </div>
 
       <div id="status" class="status hidden">
@@ -115,7 +127,7 @@
         <div class="progress-track">
           <div class="progress-bar" id="progress-bar"></div>
         </div>
-        <button id="retry-btn" class="primary hidden">Retry failed cards</button>
+        <button id="retry-btn" class="primary hidden" data-i18n="btn.retry">Retry failed cards</button>
       </div>
     </section>
 
@@ -126,65 +138,69 @@
       </div>
       <div id="card-grid" class="card-grid"></div>
       <div class="generate-row">
-        <button id="generate-btn" class="primary big">Generate Proxies (PDF)</button>
+        <button id="generate-btn" class="primary big" data-i18n="btn.generate">Generate Proxies (PDF)</button>
       </div>
     </section>
 
     <section class="panel legend">
-      <h3>Legend</h3>
+      <h3 data-i18n="legend.title">Legend</h3>
       <ul>
-        <li><span class="badge badge-localized">✓</span> Card found in the chosen language.</li>
-        <li><span class="badge badge-overlay">T</span> No usable scan in the chosen language — English card shown with
-          its name, type line and text box replaced by the official translated text (Scryfall / Gatherer printed-card
-          data).</li>
-        <li><span class="badge badge-mt">MT</span> No official translation exists — name, type line and text
-          machine-translated (translator of your choice).</li>
-        <li><span class="badge badge-english">EN</span> Kept in English.</li>
-        <li><span class="badge badge-res">HD</span> Only a low-resolution scan exists — automatically upscaled and
-          sharpened for print. Click the badge to switch back to the original image (<strong>LR</strong>), and again
-          to re-enhance it.</li>
+        <li><span class="badge badge-localized">✓</span> <span data-i18n="legend.localized">Card found in the chosen
+            language.</span></li>
+        <li><span class="badge badge-overlay">T</span> <span data-i18n="legend.overlay">No usable scan in the chosen
+            language — Official translated text added over the English scan.</span></li>
+        <li><span class="badge badge-mt">MT</span> <span data-i18n="legend.mt">No official translation found — Machine
+            translation (using chosen translator) added over the English scan.</span></li>
+        <li><span class="badge badge-english">EN</span> <span data-i18n="legend.english">Kept in English.</span></li>
+        <li><span class="badge badge-res">HD</span> <span data-i18n-html="legend.hd">Upscaled for better printing
+            quality — Click the badge to switch back to the original image (<strong>LR</strong>).</span></li>
       </ul>
-      <p class="legend-note">Click a <strong>T</strong>/<strong>MT</strong> badge to keep the English text instead
-        (click again to restore the translation).</p>
-      <p class="legend-note">Translated cards can be manually edited by clicking on the translated text.</p>
+      <h3 data-i18n="legend.notes">Additional notes</h3>
+      <ul>
+        <li data-i18n-html="legend.note.badge">Click a <strong>T</strong>/<strong>MT</strong> badge to keep the English
+          text instead (click again to restore the translation).</li>
+        <li data-i18n="legend.note.edit">Translated cards can be manually edited by clicking on the translated text.
+        </li>
+      </ul>
     </section>
   </main>
 
   <dialog id="empty-dialog">
-    <h3>No decklist</h3>
-    <p>You didn't provide a deck URL or a pasted list.<br>
+    <h3 data-i18n="dlg.empty.title">No decklist</h3>
+    <p data-i18n-html="dlg.empty.body">You didn't provide a deck URL or a pasted list.<br>
       Start with an empty deck and add cards one by one?</p>
     <form method="dialog" class="dialog-buttons">
-      <button value="start" class="primary">Start empty deck</button>
-      <button value="cancel" class="primary secondary">Cancel</button>
+      <button value="start" class="primary" data-i18n="dlg.empty.start">Start empty deck</button>
+      <button value="cancel" class="primary secondary" data-i18n="dlg.cancel">Cancel</button>
     </form>
   </dialog>
 
   <dialog id="edit-dialog">
-    <h3>Edit translated text</h3>
+    <h3 data-i18n="dlg.edit.title">Edit translated text</h3>
     <div id="edit-fields"></div>
     <form method="dialog" class="dialog-buttons">
-      <button value="save" class="primary">Save</button>
-      <button value="cancel" class="primary secondary">Cancel</button>
+      <button value="save" class="primary" data-i18n="dlg.save">Save</button>
+      <button value="cancel" class="primary secondary" data-i18n="dlg.cancel">Cancel</button>
     </form>
   </dialog>
 
   <dialog id="dfc-dialog">
-    <h3>Double-sided cards</h3>
-    <p>This deck contains <span id="dfc-count"></span> double-sided card(s).<br>
-      Do you want to print their backs as well, or only the fronts?</p>
+    <h3 data-i18n="dlg.dfc.title">Double-sided cards</h3>
+    <p id="dfc-text"></p>
     <form method="dialog" class="dialog-buttons">
-      <button value="both" class="primary">Front + back</button>
-      <button value="front" class="primary secondary">Front only</button>
+      <button value="both" class="primary" data-i18n="dlg.dfc.both">Front + back</button>
+      <button value="front" class="primary secondary" data-i18n="dlg.dfc.front">Front only</button>
     </form>
   </dialog>
 
   <footer>
-    <p>Card data and images courtesy of <a href="https://scryfall.com" target="_blank" rel="noopener">Scryfall</a>.
+    <p data-i18n-html="footer">Card data and images courtesy of <a href="https://scryfall.com" target="_blank"
+        rel="noopener">Scryfall</a>.
       Unofficial Fan Content permitted under the Fan Content Policy. Not approved/endorsed by Wizards.
       Portions of the materials used are property of Wizards of the Coast. ©Wizards of the Coast LLC.</p>
   </footer>
 
+  <script src="i18n.js"></script>
   <script src="app.js"></script>
 </body>
 

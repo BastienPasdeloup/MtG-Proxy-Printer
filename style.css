@@ -63,9 +63,60 @@ header {
   height: 16px;
   fill: var(--accent);
 }
+/* Interface-language picker (flag button + dropdown), left of the GitHub
+   buttons. Flag emoji fall back to the country letters on platforms that do
+   not draw them (Windows), so the language code is always shown too. */
+#ui-lang {
+  position: relative;
+}
+#ui-lang-btn {
+  font-family: inherit;
+  cursor: pointer;
+}
+#ui-lang .flag {
+  font-size: 1.05rem;
+  line-height: 1;
+}
+#ui-lang-menu {
+  /* right-anchored: the nav sits against the right edge of the window, so a
+     left-anchored menu would overflow it on narrow screens */
+  position: absolute;
+  top: calc(100% + 0.35rem);
+  right: 0;
+  margin: 0;
+  padding: 0.3rem;
+  list-style: none;
+  min-width: 10.5rem;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+}
+#ui-lang-menu li {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.35rem 0.6rem;
+  border-radius: 0.4rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+#ui-lang-menu li:hover {
+  background: var(--panel);
+}
+#ui-lang-menu li.current {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 @media (max-width: 560px) {
   .gh-btn span { display: none; }
   .gh-btn { padding: 0.45rem; }
+  /* the flag is the button's only content: keep it visible */
+  #ui-lang-btn .flag { display: inline; }
 }
 
 header h1 {

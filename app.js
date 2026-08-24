@@ -40,6 +40,10 @@ let deckTitle = "";
 
 const $ = (id) => document.getElementById(id);
 
+// Native name of the currently selected CARD language ("Français"…), as
+// written in the dropdown — used in the status line while searching prints.
+const cardLangName = () => $("language").selectedOptions[0]?.textContent || $("language").value;
+
 /* ------------------------------------------------------------
  * Small utilities
  * ---------------------------------------------------------- */
@@ -131,12 +135,12 @@ function parseDeckText(text) {
       if (section === "mainboard" && !explicitSB) sawMain = true;
     }
   }
-  return { title: "Pasted decklist", entries };
+  return { title: t("deck.pasted"), entries };
 }
 
 async function loadMoxfield(url) {
   const m = url.match(/moxfield\.com\/decks\/([A-Za-z0-9_-]+)/i);
-  if (!m) throw new Error("Could not extract deck ID from Moxfield URL");
+  if (!m) throw new Error(t("err.moxfieldid"));
   const api = `https://api2.moxfield.com/v2/decks/all/${m[1]}`;
   const data = await fetchWithProxies(api, { json: true });
 
@@ -156,8 +160,8 @@ async function loadMoxfield(url) {
   addBoard(data.mainboard, "mainboard");
   addBoard(data.sideboard, "sideboard");
   addBoard(data.maybeboard, "maybeboard"); // "Considering" in the Moxfield UI
-  if (entries.length === 0) throw new Error("Moxfield deck appears to be empty");
-  return { title: data.name || "Moxfield deck", entries, sortByType: true };
+  if (entries.length === 0) throw new Error(t("err.moxfieldempty"));
+  return { title: data.name || t("deck.moxfield"), entries, sortByType: true };
 }
 
 // The event page's document title is "Archetype - Player @ mtgtop8.com";
@@ -179,14 +183,14 @@ async function fetchMtgTop8Title(eventUrl) {
 
 async function loadMtgTop8(url) {
   const m = url.match(/[?&]d=(\d+)/);
-  if (!m) throw new Error("Could not extract deck ID (d=…) from MTGTop8 URL");
+  if (!m) throw new Error(t("err.mtgtop8id"));
   const [text, title] = await Promise.all([
     fetchWithProxies(`https://mtgtop8.com/mtgo?d=${m[1]}`),
     fetchMtgTop8Title(url),
   ]);
   const parsed = parseDeckText(text);
-  if (parsed.entries.length === 0) throw new Error("MTGTop8 deck appears to be empty");
-  parsed.title = title || "MTGTop8 deck";
+  if (parsed.entries.length === 0) throw new Error(t("err.mtgtop8empty"));
+  parsed.title = title || t("deck.mtgtop8");
   parsed.sortByType = true;
   return parsed;
 }
@@ -201,12 +205,12 @@ async function loadDecklist() {
   if (url) {
     if (/moxfield\.com/i.test(url)) deck = await loadMoxfield(url);
     else if (/mtgtop8\.com/i.test(url)) deck = await loadMtgTop8(url);
-    else throw new Error("Unrecognized URL — please use a Moxfield or MTGTop8 deck URL");
+    else throw new Error(t("err.url"));
   }
   if (pasted) {
     const parsed = parseDeckText(pasted);
     if (parsed.entries.length === 0 && !deck) {
-      throw new Error("Could not parse any card from the pasted text");
+      throw new Error(t("err.parse"));
     }
     if (deck) deck.entries = deck.entries.concat(parsed.entries);
     else deck = parsed;
@@ -2073,7 +2077,7 @@ function typeRank(card) {
 // tokens, which cannot be resolved by name — a token often shares its name
 // with a real card). Returns the entries that could not be loaded.
 async function loadEntries(entries, lang, sortByType = false) {
-  setStatus(`Resolving ${entries.length} cards on Scryfall…`, 0.02);
+  setStatus(t("status.resolving", { n: entries.length }), 0.02);
   const uniqueNames = [...new Set(entries.filter((e) => !e.card).map((e) => e.name))];
   const { found } = uniqueNames.length ? await resolveCards(uniqueNames) : { found: new Map() };
   const cardOf = (e) => e.card || found.get(e.name.toLowerCase());
@@ -2091,14 +2095,14 @@ async function loadEntries(entries, lang, sortByType = false) {
 
   let localizedMap = new Map();
   if (lang !== "en") {
-    setStatus(`Looking up ${lang} printings…`, 0.06);
+    setStatus(t("status.lookuplang", { lang: cardLangName() }), 0.06);
     localizedMap = await findLocalizedBatch(oracleIds, lang);
   }
 
   // English print lists are always fetched: they fill the printing dropdown
   // (translated on the fly when selected) and are the display fallback for
   // cards without a usable localized scan.
-  setStatus("Looking up printings…", 0.09);
+  setStatus(t("status.lookup"), 0.09);
   const englishMap = await findLocalizedBatch(oracleIds, "en");
 
   const versionMode = $("preferred-version").value || "language";
@@ -2108,7 +2112,7 @@ async function loadEntries(entries, lang, sortByType = false) {
 
   for (const entry of entries) {
     done++;
-    setStatus(`Fetching images (${done}/${total}): ${entry.name}`, 0.12 + 0.88 * (done / total));
+    setStatus(t("status.images", { done, total, name: entry.name }), 0.12 + 0.88 * (done / total));
     const englishCard = cardOf(entry);
     if (!englishCard) { failed.push(entry); continue; }
     try {
@@ -2203,7 +2207,7 @@ async function collectTokenEntries(englishCards) {
 
   if (partIds.size === 0 && helpers.length === 0) return [];
 
-  setStatus(`Fetching ${partIds.size + helpers.length} token(s)…`, 0.02);
+  setStatus(t("status.tokens", { n: partIds.size + helpers.length }), 0.02);
   const tokens = [];
   const idList = [...partIds];
   for (let i = 0; i < idList.length; i += 75) {
@@ -2271,10 +2275,12 @@ function reportLoadResult() {
   renderGrid();
   $("retry-btn").classList.toggle("hidden", failedEntries.length === 0);
   if (failedEntries.length > 0) {
-    setStatus(`Done, but ${failedEntries.length} card(s) could not be loaded: ` +
-      failedEntries.map((e) => e.name).join(", "), 1, true);
+    setStatus(t("status.donefailed", {
+      n: failedEntries.length,
+      list: failedEntries.map((e) => e.name).join(", "),
+    }), 1, true);
   } else if (cards.length === 0) {
-    setStatus("No card could be loaded — check the decklist and try again.", 1, true);
+    setStatus(t("status.nocard"), 1, true);
   } else {
     hideStatus();
   }
@@ -2289,13 +2295,13 @@ async function onLoadCards() {
   failedEntries = [];
 
   try {
-    setStatus("Loading decklist…", 0.02);
+    setStatus(t("status.loadingdeck"), 0.02);
     const deck = await loadDecklist();
     if (!deck) {
       // Nothing provided: offer to start an empty deck built card by card
       hideStatus();
       if (await askEmptyDeck()) {
-        deckTitle = "Custom deck";
+        deckTitle = t("deck.custom");
         currentLang = $("language").value;
         emptyDeck = true;
         renderGrid();
@@ -2336,7 +2342,7 @@ async function onLoadCards() {
     reportLoadResult();
   } catch (e) {
     console.error(e);
-    setStatus(`Error: ${e.message}`, 1, true);
+    setStatus(t("status.error", { msg: e.message }), 1, true);
   } finally {
     btn.disabled = false;
   }
@@ -2351,7 +2357,7 @@ async function onRetryFailed() {
     reportLoadResult();
   } catch (e) {
     console.error(e);
-    setStatus(`Error: ${e.message}`, 1, true);
+    setStatus(t("status.error", { msg: e.message }), 1, true);
   } finally {
     btn.disabled = false;
     $("load-btn").disabled = false;
@@ -2363,10 +2369,10 @@ async function onRetryFailed() {
  * ---------------------------------------------------------- */
 
 const BADGES = {
-  localized: { cls: "badge-localized", label: "✓", title: "Found in the chosen language" },
-  overlay: { cls: "badge-overlay", label: "T", title: "English scan with official translated text" },
-  mt: { cls: "badge-mt", label: "MT", title: "No official translation found — machine-translated with the selected translator" },
-  english: { cls: "badge-english", label: "EN", title: "Kept in English" },
+  localized: { cls: "badge-localized", label: "✓", titleKey: "badge.localized" },
+  overlay: { cls: "badge-overlay", label: "T", titleKey: "badge.overlay" },
+  mt: { cls: "badge-mt", label: "MT", titleKey: "badge.mt" },
+  english: { cls: "badge-english", label: "EN", titleKey: "badge.english" },
 };
 
 function renderGrid() {
@@ -2385,13 +2391,13 @@ function renderGrid() {
     label.textContent = text;
     grid.appendChild(label);
   };
-  sectionLabel("Cards");
+  sectionLabel(t("grid.cards"));
   for (const card of regular) {
     grid.appendChild(makeTile(card));
   }
   grid.appendChild(makeAddTile());
   if (tokens.length) {
-    sectionLabel("Tokens");
+    sectionLabel(t("grid.tokens"));
     for (const card of tokens) {
       grid.appendChild(makeTile(card));
     }
@@ -2401,8 +2407,12 @@ function renderGrid() {
   const totalSlots = cards.reduce((s, c) => s + c.qty * c.faces.length, 0);
   const pages = Math.ceil(totalSlots / 9);
   $("deck-name").textContent = deckTitle;
-  $("deck-stats").textContent =
-    `${totalCards} cards · ${totalSlots} proxies · ${pages} A4 page${pages > 1 ? "s" : ""}`;
+  $("deck-stats").textContent = t("grid.stats", {
+    cards: totalCards, slots: totalSlots, pages,
+    cardword: plural("grid.card", totalCards),
+    proxyword: plural("grid.proxy", totalSlots),
+    pageword: plural("grid.page", pages),
+  });
   $("deck-section").classList.toggle("hidden", cards.length === 0 && !emptyDeck);
 }
 
@@ -2410,12 +2420,12 @@ function updateBadge(badgeEl, card) {
   const badge = BADGES[card.status];
   badgeEl.className = `badge ${badge.cls}`;
   badgeEl.textContent = badge.label;
-  badgeEl.title = badge.title;
+  badgeEl.title = t(badge.titleKey);
   if (printTranslatable(card)) {
     badgeEl.classList.add("badge-click");
     badgeEl.title = card.forceEnglish
-      ? "English text kept — click to translate"
-      : `${badge.title} — click to keep the English text instead`;
+      ? t("badge.translate")
+      : t("badge.keepenglish", { title: t(badge.titleKey) });
   }
 }
 
@@ -2426,7 +2436,7 @@ async function openEditDialog(card, img, tile) {
   const engFaces = card.english.card_faces?.length ? card.english.card_faces : [card.english];
   const wrap = $("edit-fields");
   wrap.innerHTML = "";
-  const fields = card.overlayTexts.map((t, i) => {
+  const fields = card.overlayTexts.map((face, i) => {
     const engFace = engFaces[i] || card.english;
     // Offer only the fields the overlay actually paints on this face
     if (!overlayableFace(engFace)) return null; // dungeon map: nothing painted
@@ -2436,13 +2446,13 @@ async function openEditDialog(card, img, tile) {
     const showType = !isHelper; // helper panels have no type line
     const showText = isHelper
       ? !!(geom?.box && engFace.oracle_text)
-      : !!(t.text || engFace.oracle_text); // e.g. no text field on vanilla tokens
+      : !!(face.text || engFace.oracle_text); // e.g. no text field on vanilla tokens
     if (!showName && !showType && !showText) return null;
 
     const fs = document.createElement("fieldset");
     if (card.overlayTexts.length > 1) {
       const lg = document.createElement("legend");
-      lg.textContent = engFace.name || `Face ${i + 1}`;
+      lg.textContent = engFace.name || t("edit.face", { n: i + 1 });
       fs.appendChild(lg);
     }
     const mkField = (label, value, isArea) => {
@@ -2455,11 +2465,9 @@ async function openEditDialog(card, img, tile) {
       fs.appendChild(lab);
       return el;
     };
-    const name = showName ? mkField("Name", t.name, false) : null;
-    const type = showType ? mkField("Type line", t.type, false) : null;
-    const text = showText
-      ? mkField("Text — symbols in braces like {T}, {2}, {W} are drawn as icons", t.text, true)
-      : null;
+    const name = showName ? mkField(t("edit.name"), face.name, false) : null;
+    const type = showType ? mkField(t("edit.type"), face.type, false) : null;
+    const text = showText ? mkField(t("edit.text"), face.text, true) : null;
     wrap.appendChild(fs);
     return { name, type, text };
   });
@@ -2472,14 +2480,14 @@ async function openEditDialog(card, img, tile) {
   });
   if (!saved) return false;
 
-  card.overlayTexts = card.overlayTexts.map((t, i) => {
+  card.overlayTexts = card.overlayTexts.map((face, i) => {
     const f = fields[i];
-    if (!f) return t;
+    if (!f) return face;
     return {
-      ...t,
-      name: f.name ? (f.name.value.trim() || null) : t.name,
-      type: f.type ? (f.type.value.trim() || null) : t.type,
-      text: f.text ? (f.text.value.trim() || null) : t.text,
+      ...face,
+      name: f.name ? (f.name.value.trim() || null) : face.name,
+      type: f.type ? (f.type.value.trim() || null) : face.type,
+      text: f.text ? (f.text.value.trim() || null) : face.text,
     };
   });
   img.style.opacity = "0.4";
@@ -2492,7 +2500,7 @@ async function openEditDialog(card, img, tile) {
     if (nameDiv) nameDiv.textContent = card.printedName;
   } catch (e) {
     console.error(e);
-    setStatus(`Could not update ${card.name}: ${e.message}`, null, true);
+    setStatus(t("status.updatefail", { name: card.name, msg: e.message }), null, true);
   }
   img.style.opacity = "";
   return true;
@@ -2517,7 +2525,7 @@ function makeTile(card) {
       updateBadge(badgeEl, card);
     } catch (e) {
       console.error(e);
-      setStatus(`Could not update ${card.name}: ${e.message}`, null, true);
+      setStatus(t("status.updatefail", { name: card.name, msg: e.message }), null, true);
     }
     img.style.opacity = "";
     delete badgeEl.dataset.busy;
@@ -2535,10 +2543,10 @@ function makeTile(card) {
     if (!card.lowResScan) return;
     if (card.useOriginalImage) {
       resEl.textContent = "LR";
-      resEl.title = "Low-resolution scan kept as-is — click to enhance it for print";
+      resEl.title = t("badge.lr");
     } else {
       resEl.textContent = "HD";
-      resEl.title = "Only a low-resolution scan exists — enhanced for print (upscaled and sharpened). Click to use the original image instead";
+      resEl.title = t("badge.hd");
     }
   };
   updateResBadge();
@@ -2555,7 +2563,7 @@ function makeTile(card) {
       img.src = card.faces[face];
     } catch (e) {
       console.error(e);
-      setStatus(`Could not update ${card.name}: ${e.message}`, null, true);
+      setStatus(t("status.updatefail", { name: card.name, msg: e.message }), null, true);
     }
     updateResBadge();
     img.style.opacity = "";
@@ -2592,7 +2600,7 @@ function makeTile(card) {
   img.addEventListener("mousemove", (e) => {
     const hit = hitRegion(e);
     img.style.cursor = hit ? "pointer" : "";
-    img.title = hit ? "Click to edit the translated text" : "";
+    img.title = hit ? t("tile.edit") : "";
   });
   img.addEventListener("click", async (e) => {
     if (hitRegion(e) && await openEditDialog(card, img, tile)) face = 0;
@@ -2603,7 +2611,7 @@ function makeTile(card) {
   if (card.faces.length > 1) {
     const flipBtn = document.createElement("button");
     flipBtn.className = "flip-btn";
-    flipBtn.title = "Show the other side";
+    flipBtn.title = t("tile.flip");
     flipBtn.innerHTML =
       '<svg viewBox="0 0 24 24"><path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/></svg>';
     flipBtn.addEventListener("click", () => {
@@ -2617,7 +2625,7 @@ function makeTile(card) {
   if (card.prints.length > 1) {
     const sel = document.createElement("select");
     sel.className = "print-select";
-    sel.title = "Choose the printing to use";
+    sel.title = t("tile.printing");
     const opts = card.prints.map((p, i) => {
       const opt = document.createElement("option");
       opt.value = i;
@@ -2637,7 +2645,7 @@ function makeTile(card) {
         const langTag = card.lang !== "en" ? `${p.lang.toUpperCase()} · ` : "";
         const year = (p.released_at || "").slice(0, 4);
         const dup = sib.has(printKey(p));
-        opts[i].textContent = `${dup ? "⚠ " : ""}${langTag}${p.set.toUpperCase()} #${p.collector_number} · ${p.set_name}${year ? ` (${year})` : ""}${dup ? " — already added (merge)" : ""}`;
+        opts[i].textContent = `${dup ? "⚠ " : ""}${langTag}${p.set.toUpperCase()} #${p.collector_number} · ${p.set_name}${year ? ` (${year})` : ""}${dup ? t("tile.merge") : ""}`;
         opts[i].selected = i === card.printIndex;
       });
     };
@@ -2668,7 +2676,7 @@ function makeTile(card) {
         updateResBadge(); // the new print may (not) be a low-res scan
       } catch (e) {
         console.error(e);
-        setStatus(`Could not load that printing of ${card.name}: ${e.message}`, null, true);
+        setStatus(t("status.printfail", { name: card.name, msg: e.message }), null, true);
       }
       img.style.opacity = "";
       sel.disabled = false;
@@ -2688,7 +2696,7 @@ function makeTile(card) {
   const minus = document.createElement("button");
   minus.className = "qty-btn";
   minus.textContent = "−";
-  minus.title = "One copy less";
+  minus.title = t("tile.less");
   minus.addEventListener("click", () => {
     if (card.qty > 1) { card.qty--; renderGrid(); }
   });
@@ -2700,13 +2708,13 @@ function makeTile(card) {
   const plus = document.createElement("button");
   plus.className = "qty-btn";
   plus.textContent = "+";
-  plus.title = "One copy more";
+  plus.title = t("tile.more");
   plus.addEventListener("click", () => { card.qty++; renderGrid(); });
 
   const remove = document.createElement("button");
   remove.className = "remove-btn";
   remove.textContent = "✕";
-  remove.title = "Remove this card";
+  remove.title = t("tile.remove");
   remove.addEventListener("click", () => {
     cards = cards.filter((c) => c !== card);
     // Removing a card may orphan tokens only that card produced
@@ -2732,13 +2740,13 @@ function makeAddTile() {
   const plus = document.createElement("button");
   plus.className = "add-plus";
   plus.textContent = "+";
-  plus.title = "Add a card to the list";
+  plus.title = t("add.tile");
 
   const form = document.createElement("div");
   form.className = "add-form hidden";
   const input = document.createElement("input");
   input.type = "text";
-  input.placeholder = "Card name…";
+  input.placeholder = t("add.placeholder");
   input.setAttribute("list", "card-name-suggestions");
   let datalist = $("card-name-suggestions");
   if (!datalist) {
@@ -2751,10 +2759,10 @@ function makeAddTile() {
   qtyInput.min = "1";
   qtyInput.value = "1";
   qtyInput.className = "add-qty";
-  qtyInput.title = "Number of copies";
+  qtyInput.title = t("add.qty");
   const addBtn = document.createElement("button");
   addBtn.className = "primary";
-  addBtn.textContent = "Add";
+  addBtn.textContent = t("add.btn");
   const row = document.createElement("div");
   row.className = "add-row";
   row.append(qtyInput, addBtn);
@@ -2803,7 +2811,7 @@ function makeAddTile() {
       await addCustomCard(name, qty);
     } catch (e) {
       console.error(e);
-      setStatus(`Could not add "${name}": ${e.message}`, null, true);
+      setStatus(t("status.addfail", { name, msg: e.message }), null, true);
       input.disabled = false;
       qtyInput.disabled = false;
       addBtn.disabled = false;
@@ -2817,9 +2825,9 @@ function makeAddTile() {
 }
 
 async function addCustomCard(name, qty = 1) {
-  setStatus(`Adding ${name}…`, null);
+  setStatus(t("status.adding", { name }), null);
   const resp = await fetchRetry(`${SCRYFALL}/cards/named?fuzzy=${encodeURIComponent(name)}`);
-  if (!resp.ok) throw new Error("card not found on Scryfall");
+  if (!resp.ok) throw new Error(t("err.notfound"));
   const englishCard = await resp.json();
 
   const lang = currentLang;
@@ -2904,7 +2912,7 @@ function askEmptyDeck() {
 function askDfcChoice(count) {
   return new Promise((resolve) => {
     const dlg = $("dfc-dialog");
-    $("dfc-count").textContent = count;
+    $("dfc-text").innerHTML = t("dlg.dfc.body", { n: count });
     dlg.addEventListener("close", () => resolve(dlg.returnValue !== "front"), { once: true });
     dlg.showModal();
   });
@@ -3038,7 +3046,7 @@ async function onGeneratePdf() {
     doc.save(`${safeTitle}_proxies.pdf`);
   } catch (e) {
     console.error(e);
-    setStatus(`PDF generation failed: ${e.message}`, 1, true);
+    setStatus(t("status.pdffail", { msg: e.message }), 1, true);
   } finally {
     btn.disabled = false;
   }
@@ -3060,6 +3068,13 @@ $("deck-url").addEventListener("input", () => {
   for (const el of document.querySelectorAll(".moxfield-only")) {
     el.classList.toggle("hidden", !isMoxfield);
   }
+});
+
+// Switching the interface language (flag picker in the top-right corner):
+// i18n.js retranslates the static markup, the grid is rebuilt here because
+// its tiles, section labels and tooltips are created in JS.
+document.addEventListener("uilangchange", () => {
+  if (cards.length || emptyDeck) renderGrid();
 });
 
 // Nothing is persisted (no backend, no storage): warn before leaving once a

@@ -8,7 +8,7 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
 1. Paste a **Moxfield** (`moxfield.com/decks/…`) or **MTGTop8** (`mtgtop8.com/event?e=…&d=…`) deck URL
    and/or paste a plain-text decklist (both load together when both are given). With no input at all,
    **Load Cards** offers to start an empty deck built card by card with the "+" tile.
-2. Pick a **language**, and choose whether to include the sideboard, the **tokens** (and emblems)
+2. Pick a **card language**, and choose whether to include the sideboard, the **tokens** (and emblems)
    created by the deck's cards (excluded by default — they appear in their own category at the
    end of the grid, translated like any other card, and disappear automatically when their last
    producing card is removed) and, for Moxfield decks,
@@ -39,6 +39,19 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
 
 Nothing is stored server-side — the app has no backend and keeps everything in the page, so it warns
 before you leave once a deck is loaded.
+
+## Interface language
+
+The interface itself is available in the same eleven languages as the cards (English, French, German,
+Italian, Spanish, Portuguese, Japanese, Korean, Russian, Simplified and Traditional Chinese). Pick one
+with the **flag button** at the top right, next to *Report issue*; it is remembered in the browser's
+local storage. On a first visit the browser's preferred language is used when it is one of the eleven,
+and English otherwise. The interface language is independent from the card language.
+
+Translations live in `i18n.js` (`STRINGS[lang]`, one flat key → string map per language, falling back
+to English for any missing key). Static markup is annotated with `data-i18n` / `data-i18n-html` /
+`data-i18n-title` / `data-i18n-placeholder`; strings built in JS go through `t("key", { placeholders })`.
+Adding a language means adding an entry to `UI_LANGS` and a block to `STRINGS`.
 
 ## Language fallback
 
@@ -76,7 +89,7 @@ image (black/white borders and full-art edges are left alone).
 
 ## Technical notes
 
-- Pure static HTML/CSS/JS, no build step, no backend. PDF generation via [jsPDF](https://github.com/parallax/jsPDF).
+- Pure static HTML/CSS/JS, no build step, no backend. `i18n.js` must be loaded before `app.js`. PDF generation via [jsPDF](https://github.com/parallax/jsPDF).
 - Scryfall's API is called directly from the browser (CORS-enabled). Moxfield and MTGTop8 do not allow
   cross-origin requests, so those decklists are fetched through public CORS proxies
   (corsproxy.io, allorigins.win, codetabs.com — tried in order). If all proxies are down,
