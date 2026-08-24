@@ -96,7 +96,14 @@
         </div>
       </div>
       <div class="control-row inline">
-        <div id="sideboard-wrap">
+        <div id="tokens-wrap">
+          <label for="include-tokens" data-i18n="ctrl.tokens">Tokens</label>
+          <select id="include-tokens">
+            <option value="no" data-i18n="opt.exclude">Exclude</option>
+            <option value="yes" data-i18n="opt.include">Include</option>
+          </select>
+        </div>
+        <div id="sideboard-wrap" class="hidden">
           <label for="include-sideboard" data-i18n="ctrl.sideboard">Sideboard</label>
           <select id="include-sideboard">
             <option value="yes" data-i18n="opt.include">Include</option>
@@ -106,13 +113,6 @@
         <div id="maybeboard-wrap" class="hidden">
           <label for="include-maybeboard" data-i18n="ctrl.maybeboard">Considering</label>
           <select id="include-maybeboard">
-            <option value="no" data-i18n="opt.exclude">Exclude</option>
-            <option value="yes" data-i18n="opt.include">Include</option>
-          </select>
-        </div>
-        <div>
-          <label for="include-tokens" data-i18n="ctrl.tokens">Tokens</label>
-          <select id="include-tokens">
             <option value="no" data-i18n="opt.exclude">Exclude</option>
             <option value="yes" data-i18n="opt.include">Include</option>
           </select>

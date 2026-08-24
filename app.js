@@ -3146,9 +3146,9 @@ let deckBoards = null;
 //   there is no version to prefer and nothing to translate),
 // - the version preference needs a source that gives the printing of each
 //   card (Moxfield, Archidekt),
-// - the sideboard and "Considering" filters are only offered for boards the
-//   deck really has; while that is unknown, fall back to what the source
-//   could offer at best.
+// - the sideboard and "Considering" filters are only offered once the deck
+//   entered is known to have that board, so with nothing (or nothing
+//   readable) entered only the tokens filter is left.
 // The tokens filter is always shown: tokens are not a board, they are created
 // by the deck's own cards and only known once every card is resolved.
 function updateOptionalControls() {
@@ -3156,8 +3156,8 @@ function updateOptionalControls() {
   const translating = $("language").value !== "en";
   $("translator-wrap").classList.toggle("hidden", !translating);
   $("version-wrap").classList.toggle("hidden", !(rich && translating));
-  $("sideboard-wrap").classList.toggle("hidden", deckBoards ? !deckBoards.sideboard : false);
-  $("maybeboard-wrap").classList.toggle("hidden", deckBoards ? !deckBoards.maybeboard : !rich);
+  $("sideboard-wrap").classList.toggle("hidden", !deckBoards?.sideboard);
+  $("maybeboard-wrap").classList.toggle("hidden", !deckBoards?.maybeboard);
 }
 
 // Read the deck behind the current inputs to learn which boards it has. Runs

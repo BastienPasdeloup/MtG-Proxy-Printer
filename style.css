@@ -585,6 +585,12 @@ button.primary.big {
   font-size: 1rem;
 }
 
+/* A little air before the second heading. It collapses with the last item's
+   own 0.4rem, so the page only grows by the difference. */
+.legend ul+h3 {
+  margin-top: 0.9rem;
+}
+
 #retry-btn {
   margin-top: 0.8rem;
 }

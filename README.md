@@ -18,8 +18,9 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    The "Considering" board is read from Moxfield and from Archidekt's *Maybeboard*.
    The **Sideboard** and **Considering** dropdowns are only shown when the deck actually has such a
    board: shortly after a deck URL is entered (or a list is pasted) the decklist is read in the
-   background — that same read is reused by **Load Cards**, so nothing is fetched twice. **Tokens**
-   is always offered, since tokens are not a board of the deck but are created by its own cards.
+   background — that same read is reused by **Load Cards**, so nothing is fetched twice. Until then
+   (and with nothing entered) only **Tokens** is offered, which is always available since tokens are
+   not a board of the deck but are created by its own cards.
    For Moxfield and Archidekt decks (both give the printing of each card), a **Preferred version**
    dropdown chooses between keeping the exact printings from the deck page (same artworks, more
    text-overlay translations) or swapping to printings in the chosen language when the deck page's
