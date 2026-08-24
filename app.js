@@ -2950,11 +2950,17 @@ function askEmptyDeck() {
   });
 }
 
+// Resolves to "both" / "front", or null when the dialog was dismissed with
+// the cross or Escape — the PDF is then not generated at all, rather than
+// silently falling back to one of the two answers.
 function askDfcChoice(count) {
   return new Promise((resolve) => {
     const dlg = $("dfc-dialog");
     $("dfc-text").innerHTML = t("dlg.dfc.body", { n: count });
-    dlg.addEventListener("close", () => resolve(dlg.returnValue !== "front"), { once: true });
+    dlg.addEventListener("close", () => {
+      const v = dlg.returnValue;
+      resolve(v === "both" || v === "front" ? v : null);
+    }, { once: true });
     dlg.showModal();
   });
 }
@@ -2964,7 +2970,12 @@ async function onGeneratePdf() {
   btn.disabled = true;
   try {
     const dfcCount = cards.filter((c) => c.faces.length > 1).length;
-    const includeBacks = dfcCount > 0 ? await askDfcChoice(dfcCount) : false;
+    let includeBacks = false;
+    if (dfcCount > 0) {
+      const choice = await askDfcChoice(dfcCount);
+      if (choice === null) return; // dismissed
+      includeBacks = choice === "both";
+    }
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ unit: "mm", format: "a4" });
 
@@ -3103,14 +3114,21 @@ $("generate-btn").addEventListener("click", onGeneratePdf);
 $("deck-url").addEventListener("keydown", (e) => {
   if (e.key === "Enter") onLoadCards();
 });
-// The "Considering" board and the version preference only mean something for
-// sources that expose a maybeboard and the exact printing of each card.
-$("deck-url").addEventListener("input", () => {
+// Which of the optional controls are relevant right now:
+// - the translator and the version preference only matter when the cards are
+//   not kept in English (in English the deck page's own printing is used, so
+//   there is no version to prefer and nothing to translate),
+// - the "Considering" board and the version preference need a source that
+//   exposes a maybeboard and the exact printing of each card.
+function updateOptionalControls() {
   const rich = /moxfield\.com|archidekt\.com/i.test($("deck-url").value);
-  for (const el of document.querySelectorAll(".rich-source-only")) {
-    el.classList.toggle("hidden", !rich);
-  }
-});
+  const translating = $("language").value !== "en";
+  $("translator-wrap").classList.toggle("hidden", !translating);
+  $("maybeboard-wrap").classList.toggle("hidden", !rich);
+  $("version-wrap").classList.toggle("hidden", !(rich && translating));
+}
+$("deck-url").addEventListener("input", updateOptionalControls);
+$("language").addEventListener("change", updateOptionalControls);
 
 // The card language defaults to the interface language, and keeps following
 // it until the user picks a card language explicitly.
@@ -3118,6 +3136,7 @@ let cardLangPinned = false;
 $("language").addEventListener("change", () => { cardLangPinned = true; });
 const syncCardLang = () => {
   if (!cardLangPinned) $("language").value = uiLang;
+  updateOptionalControls();
 };
 syncCardLang();
 

@@ -21,6 +21,9 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    dropdown chooses between keeping the exact printings from the deck page (same artworks, more
    text-overlay translations) or swapping to printings in the chosen language when the deck page's
    one was never printed in it (default).
+   The **Translator** and **Preferred version** dropdowns only appear when the card language is not
+   English: with English cards there is nothing to translate and the deck page's own printings
+   (hence its artworks) are used as they are.
 3. Click **Load Cards** — card images are fetched from [Scryfall](https://scryfall.com) in the chosen language.
    A **+** tile at the end of the grid lets you add extra cards by name (with autocompletion).
    Adding a card already in the list creates a second entry on a **different printing** (so you get
@@ -38,6 +41,8 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    take the color of the border right next to them (black, white, or the artwork's color on full-art
    frames) so they blend in. If the deck contains double-sided cards, you are asked whether to print
    backs too. Print at **100% scale** (no "fit to page").
+   Every dialog can be dismissed with its **✕** or the **Escape** key, which cancels the action
+   (dismissing the double-sided question generates no PDF at all).
 
 Nothing is stored server-side — the app has no backend and keeps everything in the page, so it warns
 before you leave once a deck is loaded.

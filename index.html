@@ -76,7 +76,7 @@
             <option value="zht">繁體中文</option>
           </select>
         </div>
-        <div>
+        <div id="translator-wrap">
           <label for="translator" data-i18n="ctrl.translator">Translator</label>
           <select id="translator">
             <option value="ai" selected data-i18n="opt.ai" data-stars="★☆☆|★★★">MtG-aware AI</option>
@@ -85,7 +85,7 @@
             <option value="mymemory" data-i18n="opt.mymemory" data-stars="★★☆|★☆☆">MyMemory</option>
           </select>
         </div>
-        <div id="version-wrap" class="hidden rich-source-only">
+        <div id="version-wrap" class="hidden">
           <label for="preferred-version" data-i18n="ctrl.version">Preferred version</label>
           <select id="preferred-version">
             <option value="source" data-i18n="opt.version.source">As on the deck page (same artworks, more
@@ -103,7 +103,7 @@
             <option value="no" data-i18n="opt.exclude">Exclude</option>
           </select>
         </div>
-        <div id="maybeboard-wrap" class="hidden rich-source-only">
+        <div id="maybeboard-wrap" class="hidden">
           <label for="include-maybeboard" data-i18n="ctrl.maybeboard">Considering</label>
           <select id="include-maybeboard">
             <option value="no" data-i18n="opt.exclude">Exclude</option>
@@ -166,29 +166,41 @@
   </main>
 
   <dialog id="empty-dialog">
+    <form method="dialog" class="dialog-close-form">
+      <button value="cancel" class="dialog-close" data-i18n-title="dlg.close"
+        data-i18n-aria="dlg.close">✕</button>
+    </form>
     <h3 data-i18n="dlg.empty.title">No decklist</h3>
     <p data-i18n-html="dlg.empty.body">You didn't provide a deck URL or a pasted list.<br>
       Start with an empty deck and add cards one by one?</p>
     <form method="dialog" class="dialog-buttons">
-      <button value="start" class="primary" data-i18n="dlg.empty.start">Start empty deck</button>
+      <button value="start" class="primary" autofocus data-i18n="dlg.empty.start">Start empty deck</button>
       <button value="cancel" class="primary secondary" data-i18n="dlg.cancel">Cancel</button>
     </form>
   </dialog>
 
   <dialog id="edit-dialog">
+    <form method="dialog" class="dialog-close-form">
+      <button value="cancel" class="dialog-close" data-i18n-title="dlg.close"
+        data-i18n-aria="dlg.close">✕</button>
+    </form>
     <h3 data-i18n="dlg.edit.title">Edit translated text</h3>
     <div id="edit-fields"></div>
     <form method="dialog" class="dialog-buttons">
-      <button value="save" class="primary" data-i18n="dlg.save">Save</button>
+      <button value="save" class="primary" autofocus data-i18n="dlg.save">Save</button>
       <button value="cancel" class="primary secondary" data-i18n="dlg.cancel">Cancel</button>
     </form>
   </dialog>
 
   <dialog id="dfc-dialog">
+    <form method="dialog" class="dialog-close-form">
+      <button value="cancel" class="dialog-close" data-i18n-title="dlg.close"
+        data-i18n-aria="dlg.close">✕</button>
+    </form>
     <h3 data-i18n="dlg.dfc.title">Double-sided cards</h3>
     <p id="dfc-text"></p>
     <form method="dialog" class="dialog-buttons">
-      <button value="both" class="primary" data-i18n="dlg.dfc.both">Front + back</button>
+      <button value="both" class="primary" autofocus data-i18n="dlg.dfc.both">Front + back</button>
       <button value="front" class="primary secondary" data-i18n="dlg.dfc.front">Front only</button>
     </form>
   </dialog>

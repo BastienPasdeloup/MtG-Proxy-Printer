@@ -604,6 +604,32 @@ dialog::backdrop {
 
 dialog h3 {
   margin-top: 0;
+  padding-right: 1.5rem;
+  /* room for the close cross */
+}
+
+/* Dismiss cross, top-right of every dialog (Escape does the same thing) */
+.dialog-close-form {
+  margin: 0;
+}
+
+.dialog-close {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
+  padding: 0.1rem 0.35rem;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.dialog-close:hover {
+  background: var(--panel-2);
+  color: var(--text);
 }
 
 .dialog-buttons {

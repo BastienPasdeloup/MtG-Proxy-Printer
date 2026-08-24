@@ -78,6 +78,7 @@ const STRINGS = {
     "dlg.empty.body": "You didn't provide a deck URL or a pasted list.<br>Start with an empty deck and add cards one by one?",
     "dlg.empty.start": "Start empty deck",
     "dlg.cancel": "Cancel",
+    "dlg.close": "Close",
     "dlg.edit.title": "Edit translated text",
     "dlg.save": "Save",
     "dlg.dfc.title": "Double-sided cards",
@@ -189,6 +190,7 @@ const STRINGS = {
     "dlg.empty.body": "Vous n'avez fourni ni URL de deck ni liste collée.<br>Commencer avec un deck vide et ajouter les cartes une par une ?",
     "dlg.empty.start": "Commencer un deck vide",
     "dlg.cancel": "Annuler",
+    "dlg.close": "Fermer",
     "dlg.edit.title": "Modifier le texte traduit",
     "dlg.save": "Enregistrer",
     "dlg.dfc.title": "Cartes recto-verso",
@@ -300,6 +302,7 @@ const STRINGS = {
     "dlg.empty.body": "Du hast weder eine Deck-URL noch eine eingefügte Liste angegeben.<br>Mit einem leeren Deck beginnen und Karten einzeln hinzufügen?",
     "dlg.empty.start": "Leeres Deck beginnen",
     "dlg.cancel": "Abbrechen",
+    "dlg.close": "Schließen",
     "dlg.edit.title": "Übersetzten Text bearbeiten",
     "dlg.save": "Speichern",
     "dlg.dfc.title": "Doppelseitige Karten",
@@ -411,6 +414,7 @@ const STRINGS = {
     "dlg.empty.body": "Non hai indicato né un URL né una lista incollata.<br>Vuoi iniziare con un mazzo vuoto e aggiungere le carte una a una?",
     "dlg.empty.start": "Inizia un mazzo vuoto",
     "dlg.cancel": "Annulla",
+    "dlg.close": "Chiudi",
     "dlg.edit.title": "Modifica il testo tradotto",
     "dlg.save": "Salva",
     "dlg.dfc.title": "Carte fronte-retro",
@@ -522,6 +526,7 @@ const STRINGS = {
     "dlg.empty.body": "No has indicado ninguna URL de mazo ni has pegado una lista.<br>¿Empezar con un mazo vacío y añadir cartas una a una?",
     "dlg.empty.start": "Empezar un mazo vacío",
     "dlg.cancel": "Cancelar",
+    "dlg.close": "Cerrar",
     "dlg.edit.title": "Editar el texto traducido",
     "dlg.save": "Guardar",
     "dlg.dfc.title": "Cartas de doble cara",
@@ -633,6 +638,7 @@ const STRINGS = {
     "dlg.empty.body": "Você não informou uma URL de deck nem colou uma lista.<br>Começar com um deck vazio e adicionar cartas uma a uma?",
     "dlg.empty.start": "Começar deck vazio",
     "dlg.cancel": "Cancelar",
+    "dlg.close": "Fechar",
     "dlg.edit.title": "Editar o texto traduzido",
     "dlg.save": "Salvar",
     "dlg.dfc.title": "Cartas de face dupla",
@@ -744,6 +750,7 @@ const STRINGS = {
     "dlg.empty.body": "デッキの URL も貼り付けたリストも指定されていません。<br>空のデッキから始めて、カードを1枚ずつ追加しますか？",
     "dlg.empty.start": "空のデッキで始める",
     "dlg.cancel": "キャンセル",
+    "dlg.close": "閉じる",
     "dlg.edit.title": "翻訳テキストを編集",
     "dlg.save": "保存",
     "dlg.dfc.title": "両面カード",
@@ -852,6 +859,7 @@ const STRINGS = {
     "dlg.empty.body": "덱 URL도, 붙여넣은 목록도 없습니다.<br>빈 덱으로 시작해 카드를 하나씩 추가할까요?",
     "dlg.empty.start": "빈 덱으로 시작",
     "dlg.cancel": "취소",
+    "dlg.close": "닫기",
     "dlg.edit.title": "번역 텍스트 편집",
     "dlg.save": "저장",
     "dlg.dfc.title": "양면 카드",
@@ -960,6 +968,7 @@ const STRINGS = {
     "dlg.empty.body": "Вы не указали ни ссылку на колоду, ни вставленный список.<br>Начать с пустой колоды и добавлять карты по одной?",
     "dlg.empty.start": "Начать пустую колоду",
     "dlg.cancel": "Отмена",
+    "dlg.close": "Закрыть",
     "dlg.edit.title": "Изменить переведённый текст",
     "dlg.save": "Сохранить",
     "dlg.dfc.title": "Двусторонние карты",
@@ -1075,6 +1084,7 @@ const STRINGS = {
     "dlg.empty.body": "你既没有提供套牌网址，也没有粘贴牌表。<br>要从空套牌开始，逐张添加卡牌吗？",
     "dlg.empty.start": "从空套牌开始",
     "dlg.cancel": "取消",
+    "dlg.close": "关闭",
     "dlg.edit.title": "编辑译文",
     "dlg.save": "保存",
     "dlg.dfc.title": "双面牌",
@@ -1183,6 +1193,7 @@ const STRINGS = {
     "dlg.empty.body": "你既沒有提供套牌網址，也沒有貼上牌表。<br>要從空套牌開始，逐張新增卡牌嗎？",
     "dlg.empty.start": "從空套牌開始",
     "dlg.cancel": "取消",
+    "dlg.close": "關閉",
     "dlg.edit.title": "編輯譯文",
     "dlg.save": "儲存",
     "dlg.dfc.title": "雙面牌",
@@ -1313,6 +1324,9 @@ function applyI18n() {
   }
   for (const el of document.querySelectorAll("[data-i18n-placeholder]")) {
     el.placeholder = t(el.dataset.i18nPlaceholder, globals);
+  }
+  for (const el of document.querySelectorAll("[data-i18n-aria]")) {
+    el.setAttribute("aria-label", t(el.dataset.i18nAria, globals));
   }
 }
 
