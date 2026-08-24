@@ -235,9 +235,28 @@ async function loadMtgTop8(url) {
   return parsed;
 }
 
+// Identity of what is currently typed in: the deck behind it is fetched once
+// and shared between the board-filter preview and "Load Cards".
+const deckSourceKey = () =>
+  `${$("deck-url").value.trim()}\u0000${$("deck-text").value.trim()}`;
+
+let deckCache = null; // { key, promise }
+
 // Returns the combined deck (URL and/or pasted list — both load when both
-// are given), or null when neither input is filled.
-async function loadDecklist() {
+// are given), or null when neither input is filled. Repeated calls for the
+// same inputs share a single fetch; a failed one is not remembered.
+function loadDecklist() {
+  const key = deckSourceKey();
+  if (!deckCache || deckCache.key !== key) {
+    deckCache = { key, promise: fetchDecklist() };
+    deckCache.promise.catch(() => {
+      if (deckCache?.key === key) deckCache = null;
+    });
+  }
+  return deckCache.promise;
+}
+
+async function fetchDecklist() {
   const url = $("deck-url").value.trim();
   const pasted = $("deck-text").value.trim();
 
@@ -2338,6 +2357,9 @@ async function onLoadCards() {
   try {
     setStatus(t("status.loadingdeck"), 0.02);
     const deck = await loadDecklist();
+    // The preview's copy is good enough to start from, but a later reload
+    // should see the deck page as it is then, not as it was when typed.
+    deckCache = null;
     if (!deck) {
       // Nothing provided: offer to start an empty deck built card by card
       hideStatus();
@@ -3114,20 +3136,67 @@ $("generate-btn").addEventListener("click", onGeneratePdf);
 $("deck-url").addEventListener("keydown", (e) => {
   if (e.key === "Enter") onLoadCards();
 });
+// Which boards the deck currently entered actually has, or null while that is
+// unknown (nothing entered, still loading, or the source could not be read).
+let deckBoards = null;
+
 // Which of the optional controls are relevant right now:
 // - the translator and the version preference only matter when the cards are
 //   not kept in English (in English the deck page's own printing is used, so
 //   there is no version to prefer and nothing to translate),
-// - the "Considering" board and the version preference need a source that
-//   exposes a maybeboard and the exact printing of each card.
+// - the version preference needs a source that gives the printing of each
+//   card (Moxfield, Archidekt),
+// - the sideboard and "Considering" filters are only offered for boards the
+//   deck really has; while that is unknown, fall back to what the source
+//   could offer at best.
+// The tokens filter is always shown: tokens are not a board, they are created
+// by the deck's own cards and only known once every card is resolved.
 function updateOptionalControls() {
   const rich = /moxfield\.com|archidekt\.com/i.test($("deck-url").value);
   const translating = $("language").value !== "en";
   $("translator-wrap").classList.toggle("hidden", !translating);
-  $("maybeboard-wrap").classList.toggle("hidden", !rich);
   $("version-wrap").classList.toggle("hidden", !(rich && translating));
+  $("sideboard-wrap").classList.toggle("hidden", deckBoards ? !deckBoards.sideboard : false);
+  $("maybeboard-wrap").classList.toggle("hidden", deckBoards ? !deckBoards.maybeboard : !rich);
 }
-$("deck-url").addEventListener("input", updateOptionalControls);
+
+// Read the deck behind the current inputs to learn which boards it has. Runs
+// debounced while typing, and only once the URL looks complete, so a
+// half-typed address is not sent to the proxies. The fetch is the one
+// "Load Cards" will reuse, so nothing is paid twice.
+const DECK_URL_READY = /moxfield\.com\/decks\/[A-Za-z0-9_-]+|archidekt\.com\/decks\/\d+|mtgtop8\.com\/.*[?&]d=\d+/i;
+let boardsTimer = null;
+let boardsToken = 0;
+
+function refreshDeckBoards() {
+  clearTimeout(boardsTimer);
+  const token = ++boardsToken;
+  const url = $("deck-url").value.trim();
+  const pasted = $("deck-text").value.trim();
+  if ((url && !DECK_URL_READY.test(url)) || (!url && !pasted)) {
+    deckBoards = null; // nothing usable to look at yet
+    updateOptionalControls();
+    return;
+  }
+  boardsTimer = setTimeout(async () => {
+    let boards = null;
+    try {
+      const deck = await loadDecklist();
+      if (deck) {
+        boards = {
+          sideboard: deck.entries.some((e) => e.section === "sideboard"),
+          maybeboard: deck.entries.some((e) => e.section === "maybeboard"),
+        };
+      }
+    } catch { /* unreadable for now: keep every filter available */ }
+    if (token !== boardsToken) return; // the inputs changed meanwhile
+    deckBoards = boards;
+    updateOptionalControls();
+  }, 600);
+}
+
+$("deck-url").addEventListener("input", () => { updateOptionalControls(); refreshDeckBoards(); });
+$("deck-text").addEventListener("input", refreshDeckBoards);
 $("language").addEventListener("change", updateOptionalControls);
 
 // The card language defaults to the interface language, and keeps following

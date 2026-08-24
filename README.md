@@ -9,14 +9,17 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    (`mtgtop8.com/event?e=…&d=…`) deck URL and/or paste a plain-text decklist (both load together when both are given). With no input at all,
    **Load Cards** offers to start an empty deck built card by card with the "+" tile.
 2. Pick a **card language** (it starts on the interface language, see below), and choose whether to
-   include the sideboard, the **tokens** (and emblems)
+   include the sideboard, the "Considering" board and the **tokens** (and emblems)
    created by the deck's cards (excluded by default — they appear in their own category at the
    end of the grid, translated like any other card, and disappear automatically when their last
-   producing card is removed) and, for Moxfield decks,
-   the "Considering" board. Including tokens also brings the **game-aid helper cards** the deck
+   producing card is removed). Including tokens also brings the **game-aid helper cards** the deck
    calls for: City's Blessing (ascend), The Monarch, the dungeons and their reward tokens
    (venture / initiative), Start Your Engines!, Energy Reserve ({E}) and a Storm counter card.
    The "Considering" board is read from Moxfield and from Archidekt's *Maybeboard*.
+   The **Sideboard** and **Considering** dropdowns are only shown when the deck actually has such a
+   board: shortly after a deck URL is entered (or a list is pasted) the decklist is read in the
+   background — that same read is reused by **Load Cards**, so nothing is fetched twice. **Tokens**
+   is always offered, since tokens are not a board of the deck but are created by its own cards.
    For Moxfield and Archidekt decks (both give the printing of each card), a **Preferred version**
    dropdown chooses between keeping the exact printings from the deck page (same artworks, more
    text-overlay translations) or swapping to printings in the chosen language when the deck page's
