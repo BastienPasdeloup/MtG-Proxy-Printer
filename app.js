@@ -2,7 +2,8 @@
 
 /* ============================================================
  * MtG Proxy Printer
- * - Load a decklist from Moxfield or MTGTop8 (or pasted text)
+ * - Load a decklist from Moxfield, Archidekt, MTGTop8 or CubeCobra
+ *   (or pasted text)
  * - Fetch card images from Scryfall in a chosen language
  * - Fallback: English image + official translated text overlay
  * - Generate an A4 PDF, 9 cards per page, 62 x 87 mm each
@@ -10,7 +11,8 @@
 
 const SCRYFALL = "https://api.scryfall.com";
 
-// Proxies tried in order (Moxfield / MTGTop8 do not send CORS headers).
+// Proxies tried in order (Moxfield / MTGTop8 / CubeCobra deck exports do
+// not send CORS headers).
 // - corsproxy.io works for MTGTop8 but is blocked by Moxfield's Cloudflare.
 // - r.jina.ai reaches Moxfield too; it wraps the response in a markdown
 //   preamble ("Markdown Content:") that gets stripped by `post`.
@@ -204,6 +206,80 @@ async function loadArchidekt(url) {
   return { title: data.name || t("deck.archidekt"), entries, sortByType: true };
 }
 
+// CubeCobra hosts both cubes and the decks drafted out of them, so a
+// CubeCobra address is one or the other:
+// - a cube (/cube/overview/…, /cube/list/… and friends) comes from the
+//   site's public JSON API, the one CubeCobra endpoint that sends CORS
+//   headers, so it is read directly; its cards carry the printing picked in
+//   the cube and the cube's own maybeboard maps to our "Considering" board,
+// - a deck (/cube/deck/…) belongs to a draft holding one seat per drafter.
+//   The deck page shows the first seat (the drafter); `?seat=N` picks
+//   another. Of the deck's export formats only XMage carries everything we
+//   need in a few lines — deck name, quantities, printings, sideboard — and
+//   like Moxfield it has to go through the proxies.
+const CUBECOBRA_DECK = /cubecobra\.com\/cube\/deck\/(?:download\/[a-z]+\/)?([A-Za-z0-9_-]+)(?:\/(\d+))?/i;
+const CUBECOBRA_CUBE = /cubecobra\.com\/cube\/(?:api\/cubeJSON|[a-z]+)\/([^/?#]+)/i;
+
+async function loadCubeCobra(url) {
+  const deck = url.match(CUBECOBRA_DECK);
+  if (deck) {
+    const seat = deck[2] || url.match(/[?&]seat=(\d+)/)?.[1] || "0";
+    return loadCubeCobraDeck(deck[1], seat);
+  }
+  const cube = url.match(CUBECOBRA_CUBE);
+  if (cube) return loadCubeCobraCube(cube[1]);
+  throw new Error(t("err.cubecobraid"));
+}
+
+async function loadCubeCobraCube(id) {
+  const api = `https://cubecobra.com/cube/api/cubeJSON/${encodeURIComponent(id)}`;
+  const data = await fetchWithProxies(api, { json: true });
+
+  const entries = [];
+  const addBoard = (board, section) => {
+    // One entry per copy: a cube can hold the same card twice, and duplicates
+    // are merged into a quantity later on.
+    for (const item of board || []) {
+      const details = item.details || {};
+      if (!details.name) continue;
+      const print = details.set
+        ? { set: String(details.set).toLowerCase(), cn: String(details.collector_number ?? "") }
+        : null;
+      entries.push({ name: details.name, qty: 1, section, print });
+    }
+  };
+  addBoard(data.cards?.mainboard, "mainboard");
+  addBoard(data.cards?.maybeboard, "maybeboard");
+  if (entries.length === 0) throw new Error(t("err.cubecobraempty"));
+  return { title: data.name || t("deck.cubecobracube"), entries, sortByType: true };
+}
+
+// XMage export: "NAME:<deck name>", then "1 [SET:123] Card Name" per line,
+// with "SB: " in front of the sideboard ones.
+async function loadCubeCobraDeck(id, seat) {
+  const url = `https://cubecobra.com/cube/deck/download/xmage/${encodeURIComponent(id)}/${seat}`;
+  const text = await fetchWithProxies(url);
+
+  let title = "";
+  const entries = [];
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    const named = line.match(/^NAME:\s*(.+)$/i);
+    if (named) { title = named[1].trim(); continue; }
+    const m = line.match(/^(SB:\s*)?(\d+)\s+\[([^\]:]*):([^\]]*)\]\s+(.+)$/);
+    if (!m) continue;
+    entries.push({
+      name: m[5].trim(),
+      qty: parseInt(m[2], 10),
+      section: m[1] ? "sideboard" : "mainboard",
+      // Remember the exact printing the drafter picked from the cube
+      print: m[3] ? { set: m[3].toLowerCase(), cn: m[4].trim() } : null,
+    });
+  }
+  if (entries.length === 0) throw new Error(t("err.cubecobraempty"));
+  return { title: title || t("deck.cubecobra"), entries, sortByType: true };
+}
+
 // The event page's document title is "Archetype - Player @ mtgtop8.com";
 // the archetype (the entry selected in the left listing) is what we want.
 async function fetchMtgTop8Title(eventUrl) {
@@ -265,6 +341,7 @@ async function fetchDecklist() {
     if (/moxfield\.com/i.test(url)) deck = await loadMoxfield(url);
     else if (/archidekt\.com/i.test(url)) deck = await loadArchidekt(url);
     else if (/mtgtop8\.com/i.test(url)) deck = await loadMtgTop8(url);
+    else if (/cubecobra\.com/i.test(url)) deck = await loadCubeCobra(url);
     else throw new Error(t("err.url"));
   }
   if (pasted) {
@@ -3145,14 +3222,14 @@ let deckBoards = null;
 //   not kept in English (in English the deck page's own printing is used, so
 //   there is no version to prefer and nothing to translate),
 // - the version preference needs a source that gives the printing of each
-//   card (Moxfield, Archidekt),
+//   card (Moxfield, Archidekt, CubeCobra),
 // - the sideboard and "Considering" filters are only offered once the deck
 //   entered is known to have that board, so with nothing (or nothing
 //   readable) entered only the tokens filter is left.
 // The tokens filter is always shown: tokens are not a board, they are created
 // by the deck's own cards and only known once every card is resolved.
 function updateOptionalControls() {
-  const rich = /moxfield\.com|archidekt\.com/i.test($("deck-url").value);
+  const rich = /moxfield\.com|archidekt\.com|cubecobra\.com/i.test($("deck-url").value);
   const translating = $("language").value !== "en";
   $("translator-wrap").classList.toggle("hidden", !translating);
   $("version-wrap").classList.toggle("hidden", !(rich && translating));
@@ -3164,7 +3241,7 @@ function updateOptionalControls() {
 // debounced while typing, and only once the URL looks complete, so a
 // half-typed address is not sent to the proxies. The fetch is the one
 // "Load Cards" will reuse, so nothing is paid twice.
-const DECK_URL_READY = /moxfield\.com\/decks\/[A-Za-z0-9_-]+|archidekt\.com\/decks\/\d+|mtgtop8\.com\/.*[?&]d=\d+/i;
+const DECK_URL_READY = /moxfield\.com\/decks\/[A-Za-z0-9_-]+|archidekt\.com\/decks\/\d+|mtgtop8\.com\/.*[?&]d=\d+|cubecobra\.com\/cube\/(?:deck\/[A-Za-z0-9_-]+|[a-z]+\/[^/?#]+)/i;
 let boardsTimer = null;
 let boardsToken = 0;
 

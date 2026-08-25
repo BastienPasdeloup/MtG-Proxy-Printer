@@ -5,9 +5,12 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
 
 ## Usage
 
-1. Paste a **Moxfield** (`moxfield.com/decks/…`), **Archidekt** (`archidekt.com/decks/…`) or **MTGTop8**
-   (`mtgtop8.com/event?e=…&d=…`) deck URL and/or paste a plain-text decklist (both load together when both are given). With no input at all,
+1. Paste a **Moxfield** (`moxfield.com/decks/…`), **Archidekt** (`archidekt.com/decks/…`), **MTGTop8**
+   (`mtgtop8.com/event?e=…&d=…`) or **CubeCobra** URL and/or paste a plain-text decklist (both load together when both are given). With no input at all,
    **Load Cards** offers to start an empty deck built card by card with the "+" tile.
+   A CubeCobra address may be either a drafted deck (`cubecobra.com/cube/deck/…`) or a whole cube
+   (`cubecobra.com/cube/overview/…`, `/cube/list/…`, …). A deck belongs to a draft with one seat per
+   drafter: the first seat is loaded, and `?seat=N` appended to the URL picks another one.
 2. Pick a **card language** (it starts on the interface language, see below), and choose whether to
    include the sideboard, the "Considering" board and the **tokens** (and emblems)
    created by the deck's cards (excluded by default — they appear in their own category at the
@@ -15,13 +18,14 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    producing card is removed). Including tokens also brings the **game-aid helper cards** the deck
    calls for: City's Blessing (ascend), The Monarch, the dungeons and their reward tokens
    (venture / initiative), Start Your Engines!, Energy Reserve ({E}) and a Storm counter card.
-   The "Considering" board is read from Moxfield and from Archidekt's *Maybeboard*.
+   The "Considering" board is read from Moxfield, from Archidekt's *Maybeboard* and from a
+   CubeCobra cube's *Maybeboard* (a CubeCobra deck has a sideboard instead).
    The **Sideboard** and **Considering** dropdowns are only shown when the deck actually has such a
    board: shortly after a deck URL is entered (or a list is pasted) the decklist is read in the
    background — that same read is reused by **Load Cards**, so nothing is fetched twice. Until then
    (and with nothing entered) only **Tokens** is offered, which is always available since tokens are
    not a board of the deck but are created by its own cards.
-   For Moxfield and Archidekt decks (both give the printing of each card), a **Preferred version**
+   For Moxfield, Archidekt and CubeCobra decks (all of which give the printing of each card), a **Preferred version**
    dropdown chooses between keeping the exact printings from the deck page (same artworks, more
    text-overlay translations) or swapping to printings in the chosen language when the deck page's
    one was never printed in it (default).
@@ -102,9 +106,10 @@ image (black/white borders and full-art edges are left alone).
 ## Technical notes
 
 - Pure static HTML/CSS/JS, no build step, no backend. `i18n.js` must be loaded before `app.js`. PDF generation via [jsPDF](https://github.com/parallax/jsPDF).
-- Scryfall's API is called directly from the browser (CORS-enabled). Moxfield, Archidekt and MTGTop8
+- Scryfall's API is called directly from the browser (CORS-enabled), and so is CubeCobra's public
+  cube API (`/cube/api/cubeJSON/…`). Moxfield, Archidekt, MTGTop8 and CubeCobra's deck exports
   do not allow cross-origin requests, so those decklists are fetched through public CORS proxies
-  (corsproxy.io, allorigins.win, codetabs.com — tried in order). If all proxies are down,
+  (corsproxy.io, r.jina.ai, allorigins.win, codetabs.com — tried in order). If all proxies are down,
   use the manual paste fallback.
 
 ## Legal
