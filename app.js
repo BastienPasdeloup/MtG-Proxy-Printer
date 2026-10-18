@@ -2741,7 +2741,10 @@ function openThumbPicker(anchor, items, { selected = -1, heading = "" } = {}) {
       img.src = item.thumb;
       img.alt = item.title || "";
       img.loading = "lazy";
-      btn.appendChild(img);
+      const imgBox = document.createElement("div");
+      imgBox.className = "thumb-img";
+      imgBox.appendChild(img);
+      btn.appendChild(imgBox);
       if (item.badge) {
         const badge = document.createElement("span");
         const show = (status) => {
@@ -2758,7 +2761,7 @@ function openThumbPicker(anchor, items, { selected = -1, heading = "" } = {}) {
           badge.textContent = "…";
           item.badge.then(show, () => badge.remove());
         }
-        btn.appendChild(badge);
+        imgBox.appendChild(badge);
       }
       for (const line of item.lines || []) {
         if (!line) continue;

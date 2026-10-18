@@ -330,11 +330,13 @@ button.primary.big {
 }
 
 /* Right-side control stack (version badge, HD badge, flip button), below the
-   title bar so the mana cost stays visible. A hidden HD badge collapses out. */
+   title bar so the mana cost stays visible. A hidden HD badge collapses out.
+   Placed in fractions of the image so the picker thumbnails can put their
+   badge at the very same spot (see .thumb-badge). */
 .card-badges {
   position: absolute;
-  top: 2.3rem;
-  right: 0.55rem;
+  top: 16%;
+  right: 5.3%;
   z-index: 3;
   display: flex;
   flex-direction: column;
@@ -629,14 +631,21 @@ button.primary.big {
   color: var(--text);
 }
 
-/* status badge the card would get (✓ / T / MT / EN), top right */
+/* Image box of a thumbnail: the reference for the badge position */
+.thumb-img {
+  position: relative;
+  container-type: inline-size;
+}
+
+/* status badge the card would get (✓ / T / MT / EN), at the same place as
+   on the card (.card-badges), scaled with the thumbnail as far as legible */
 .thumb-badge {
   position: absolute;
-  top: 0.35rem;
-  right: 0.35rem;
-  min-width: 0;
-  padding: 0.05rem 0.35rem;
-  font-size: 0.62rem;
+  top: 16%;
+  right: 5.3%;
+  min-width: 20.6cqw;
+  padding: 0.05rem 0.3rem;
+  font-size: clamp(0.55rem, 6.8cqw, 0.7rem);
 }
 
 .badge-pending {
