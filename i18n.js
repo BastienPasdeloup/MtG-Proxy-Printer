@@ -135,6 +135,10 @@ const STRINGS = {
     "add.placeholder": "Card name…",
     "add.qty": "Number of copies",
     "add.btn": "Add",
+    "add.token.tile": "Add a token or emblem",
+    "add.token.placeholder": "Token name…",
+    "picker.versions": "{n} versions",
+    "picker.tokens": "{n} matching tokens — pick one",
     "edit.face": "Face {n}",
     "edit.name": "Name",
     "edit.type": "Type line",
@@ -150,6 +154,7 @@ const STRINGS = {
     "err.url": "Unrecognized URL — please use a Moxfield, Archidekt, MTGTop8 or CubeCobra URL",
     "err.parse": "Could not parse any card from the pasted text",
     "err.notfound": "card not found on Scryfall",
+    "err.notoken": "no token or emblem found with that name",
   },
 
   /* ---------------------------------------------------------- Français */
@@ -251,6 +256,10 @@ const STRINGS = {
     "add.placeholder": "Nom de la carte…",
     "add.qty": "Nombre d'exemplaires",
     "add.btn": "Ajouter",
+    "add.token.tile": "Ajouter un jeton ou un emblème",
+    "add.token.placeholder": "Nom du jeton…",
+    "picker.versions": "{n} versions",
+    "picker.tokens": "{n} jetons correspondent — choisissez-en un",
     "edit.face": "Face {n}",
     "edit.name": "Nom",
     "edit.type": "Ligne de type",
@@ -266,6 +275,7 @@ const STRINGS = {
     "err.url": "URL non reconnue — utilisez une URL Moxfield, Archidekt, MTGTop8 ou CubeCobra",
     "err.parse": "Aucune carte n'a pu être lue dans le texte collé",
     "err.notfound": "carte introuvable sur Scryfall",
+    "err.notoken": "aucun jeton ni emblème trouvé sous ce nom",
   },
 
   /* ---------------------------------------------------------- Deutsch */
@@ -367,6 +377,10 @@ const STRINGS = {
     "add.placeholder": "Kartenname…",
     "add.qty": "Anzahl der Exemplare",
     "add.btn": "Hinzufügen",
+    "add.token.tile": "Spielstein oder Emblem hinzufügen",
+    "add.token.placeholder": "Name des Spielsteins…",
+    "picker.versions": "{n} Versionen",
+    "picker.tokens": "{n} passende Spielsteine — wähle einen aus",
     "edit.face": "Seite {n}",
     "edit.name": "Name",
     "edit.type": "Typzeile",
@@ -382,6 +396,7 @@ const STRINGS = {
     "err.url": "URL nicht erkannt — bitte eine Moxfield-, Archidekt-, MTGTop8- oder CubeCobra-URL verwenden",
     "err.parse": "Aus dem eingefügten Text konnte keine Karte gelesen werden",
     "err.notfound": "Karte auf Scryfall nicht gefunden",
+    "err.notoken": "kein Spielstein oder Emblem mit diesem Namen gefunden",
   },
 
   /* ---------------------------------------------------------- Italiano */
@@ -483,6 +498,10 @@ const STRINGS = {
     "add.placeholder": "Nome della carta…",
     "add.qty": "Numero di copie",
     "add.btn": "Aggiungi",
+    "add.token.tile": "Aggiungi una pedina o un emblema",
+    "add.token.placeholder": "Nome della pedina…",
+    "picker.versions": "{n} versioni",
+    "picker.tokens": "{n} pedine corrispondenti — scegline una",
     "edit.face": "Lato {n}",
     "edit.name": "Nome",
     "edit.type": "Linea di tipo",
@@ -498,6 +517,7 @@ const STRINGS = {
     "err.url": "URL non riconosciuto — usa un URL Moxfield, Archidekt, MTGTop8 o CubeCobra",
     "err.parse": "Non è stata riconosciuta alcuna carta nel testo incollato",
     "err.notfound": "carta non trovata su Scryfall",
+    "err.notoken": "nessuna pedina o emblema trovato con questo nome",
   },
 
   /* ---------------------------------------------------------- Español */
@@ -599,6 +619,10 @@ const STRINGS = {
     "add.placeholder": "Nombre de la carta…",
     "add.qty": "Número de copias",
     "add.btn": "Añadir",
+    "add.token.tile": "Añadir una ficha o un emblema",
+    "add.token.placeholder": "Nombre de la ficha…",
+    "picker.versions": "{n} versiones",
+    "picker.tokens": "{n} fichas coinciden — elige una",
     "edit.face": "Cara {n}",
     "edit.name": "Nombre",
     "edit.type": "Línea de tipo",
@@ -614,6 +638,7 @@ const STRINGS = {
     "err.url": "URL no reconocida — usa una URL de Moxfield, Archidekt, MTGTop8 o CubeCobra",
     "err.parse": "No se pudo reconocer ninguna carta en el texto pegado",
     "err.notfound": "carta no encontrada en Scryfall",
+    "err.notoken": "no se encontró ninguna ficha ni emblema con ese nombre",
   },
 
   /* ---------------------------------------------------------- Português */
@@ -715,6 +740,10 @@ const STRINGS = {
     "add.placeholder": "Nome da carta…",
     "add.qty": "Número de cópias",
     "add.btn": "Adicionar",
+    "add.token.tile": "Adicionar uma ficha ou um emblema",
+    "add.token.placeholder": "Nome da ficha…",
+    "picker.versions": "{n} versões",
+    "picker.tokens": "{n} fichas correspondem — escolha uma",
     "edit.face": "Face {n}",
     "edit.name": "Nome",
     "edit.type": "Linha de tipo",
@@ -730,6 +759,7 @@ const STRINGS = {
     "err.url": "URL não reconhecida — use uma URL do Moxfield, Archidekt, MTGTop8 ou CubeCobra",
     "err.parse": "Nenhuma carta pôde ser lida no texto colado",
     "err.notfound": "carta não encontrada no Scryfall",
+    "err.notoken": "nenhuma ficha ou emblema encontrado com esse nome",
   },
 
   /* ---------------------------------------------------------- 日本語 */
@@ -828,6 +858,10 @@ const STRINGS = {
     "add.placeholder": "カード名…",
     "add.qty": "枚数",
     "add.btn": "追加",
+    "add.token.tile": "トークンや紋章を追加",
+    "add.token.placeholder": "トークン名…",
+    "picker.versions": "{n} 種類のバージョン",
+    "picker.tokens": "{n} 個のトークンが該当 — 1つ選んでください",
     "edit.face": "面 {n}",
     "edit.name": "カード名",
     "edit.type": "タイプ行",
@@ -843,6 +877,7 @@ const STRINGS = {
     "err.url": "URL を認識できません — Moxfield、Archidekt、MTGTop8 または CubeCobra の URL を使ってください",
     "err.parse": "貼り付けたテキストからカードを読み取れませんでした",
     "err.notfound": "Scryfall でカードが見つかりません",
+    "err.notoken": "その名前のトークンや紋章は見つかりません",
   },
 
   /* ---------------------------------------------------------- 한국어 */
@@ -941,6 +976,10 @@ const STRINGS = {
     "add.placeholder": "카드 이름…",
     "add.qty": "장수",
     "add.btn": "추가",
+    "add.token.tile": "토큰 또는 휘장 추가",
+    "add.token.placeholder": "토큰 이름…",
+    "picker.versions": "버전 {n}개",
+    "picker.tokens": "일치하는 토큰 {n}개 — 하나를 선택하세요",
     "edit.face": "{n}면",
     "edit.name": "이름",
     "edit.type": "종류 줄",
@@ -956,6 +995,7 @@ const STRINGS = {
     "err.url": "인식할 수 없는 URL입니다 — Moxfield, Archidekt, MTGTop8 또는 CubeCobra URL을 사용하세요",
     "err.parse": "붙여넣은 텍스트에서 카드를 인식하지 못했습니다",
     "err.notfound": "Scryfall에서 카드를 찾을 수 없습니다",
+    "err.notoken": "해당 이름의 토큰이나 휘장을 찾을 수 없습니다",
   },
 
   /* ---------------------------------------------------------- Русский */
@@ -1061,6 +1101,10 @@ const STRINGS = {
     "add.placeholder": "Название карты…",
     "add.qty": "Количество копий",
     "add.btn": "Добавить",
+    "add.token.tile": "Добавить токен или эмблему",
+    "add.token.placeholder": "Название токена…",
+    "picker.versions": "Версий: {n}",
+    "picker.tokens": "Подходящих токенов: {n} — выберите один",
     "edit.face": "Сторона {n}",
     "edit.name": "Название",
     "edit.type": "Строка типа",
@@ -1076,6 +1120,7 @@ const STRINGS = {
     "err.url": "Ссылка не распознана — используйте ссылку Moxfield, Archidekt, MTGTop8 или CubeCobra",
     "err.parse": "Во вставленном тексте не найдено ни одной карты",
     "err.notfound": "карта не найдена на Scryfall",
+    "err.notoken": "токен или эмблема с таким названием не найдены",
   },
 
   /* ---------------------------------------------------------- 简体中文 */
@@ -1174,6 +1219,10 @@ const STRINGS = {
     "add.placeholder": "卡牌名称…",
     "add.qty": "数量",
     "add.btn": "添加",
+    "add.token.tile": "添加衍生物或徽记",
+    "add.token.placeholder": "衍生物名称…",
+    "picker.versions": "{n} 个版本",
+    "picker.tokens": "{n} 个匹配的衍生物 — 请选择一个",
     "edit.face": "第 {n} 面",
     "edit.name": "名称",
     "edit.type": "类别栏",
@@ -1189,6 +1238,7 @@ const STRINGS = {
     "err.url": "无法识别的网址 — 请使用 Moxfield、Archidekt、MTGTop8 或 CubeCobra 的网址",
     "err.parse": "无法从粘贴的文本中识别出任何卡牌",
     "err.notfound": "在 Scryfall 上找不到该卡牌",
+    "err.notoken": "未找到该名称的衍生物或徽记",
   },
 
   /* ---------------------------------------------------------- 繁體中文 */
@@ -1287,6 +1337,10 @@ const STRINGS = {
     "add.placeholder": "卡牌名稱…",
     "add.qty": "數量",
     "add.btn": "新增",
+    "add.token.tile": "加入衍生物或徽記",
+    "add.token.placeholder": "衍生物名稱…",
+    "picker.versions": "{n} 個版本",
+    "picker.tokens": "{n} 個符合的衍生物 — 請選擇一個",
     "edit.face": "第 {n} 面",
     "edit.name": "名稱",
     "edit.type": "類別欄",
@@ -1302,6 +1356,7 @@ const STRINGS = {
     "err.url": "無法辨識的網址 — 請使用 Moxfield、Archidekt、MTGTop8 或 CubeCobra 的網址",
     "err.parse": "無法從貼上的文字中辨識出任何卡牌",
     "err.notfound": "在 Scryfall 上找不到該卡牌",
+    "err.notoken": "找不到該名稱的衍生物或徽記",
   },
 };
 

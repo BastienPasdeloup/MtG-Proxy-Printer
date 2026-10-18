@@ -18,6 +18,8 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    producing card is removed). Including tokens also brings the **game-aid helper cards** the deck
    calls for: City's Blessing (ascend), The Monarch, the dungeons and their reward tokens
    (venture / initiative), Start Your Engines!, Energy Reserve ({E}) and a Storm counter card.
+   Whatever this setting, the token category is always shown, with its own **+** tile to add
+   tokens, emblems or game aids by hand (see step 3).
    The "Considering" board is read from Moxfield, from Archidekt's *Maybeboard* and from a
    CubeCobra cube's *Maybeboard* (a CubeCobra deck has a sideboard instead).
    The **Sideboard** and **Considering** dropdowns are only shown when the deck actually has such a
@@ -35,11 +37,15 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
 3. Click **Load Cards** — card images are fetched from [Scryfall](https://scryfall.com) in the chosen language.
    A **+** tile at the end of the grid lets you add extra cards by name (with autocompletion).
    Adding a card already in the list creates a second entry on a **different printing** (so you get
-   two artworks); if you instead pick a printing another copy already uses, the dropdown flags it
-   (⚠ "already added") and selecting it merges the two copies back into one.
-4. Adjust the deck: remove cards, change quantities, pick another printing from the dropdown
-   under each card — it lists the chosen language's printings and the English ones (translated
-   on the fly when selected), sorted by release date (double-faced cards flip with the arrows
+   two artworks); if you instead pick a printing another copy already uses, the version picker flags it
+   (⚠, "already added" in its tooltip) and selecting it merges the two copies back into one.
+   The token category has its own **+** tile: type a token name (autocompleted among tokens,
+   emblems and dungeons) and, when several tokens share it (there are a dozen "Soldier" tokens),
+   pick the right one from their thumbnails. Tokens added this way stay in the list even when no
+   card producing them is left.
+4. Adjust the deck: remove cards, change quantities, pick another printing with the version button
+   under each card — it opens the thumbnails of the chosen language's printings and the English
+   ones (translated on the fly when selected), sorted by release date (double-faced cards flip with the arrows
    button at the bottom right of the image). Translated cards show a pencil cursor — click the
    card to edit its name, type line and text manually (only the fields painted on that card
    are offered).

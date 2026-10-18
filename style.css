@@ -530,13 +530,125 @@ button.primary.big {
 }
 
 .print-select {
+  position: relative;
   width: 100%;
   font-size: 0.72rem;
-  padding: 0.25rem 0.4rem;
+  font-family: inherit;
+  padding: 0.25rem 1.3rem 0.25rem 0.4rem;
   border-radius: 6px;
   background: var(--panel-2);
   border: 1px solid var(--border);
   color: var(--muted);
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+}
+
+.print-select::after {
+  content: "▾";
+  position: absolute;
+  right: 0.45rem;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.print-select:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+.print-select:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+/* Thumbnail picker: drops down under the version button (or the token tile's
+   Add button) and lists the card images to choose from. */
+.thumb-picker {
+  position: absolute;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55);
+}
+
+.thumb-picker-head {
+  flex: none;
+  padding: 0.55rem 2.2rem 0.45rem 0.8rem;
+  font-size: 0.8rem;
+  color: var(--muted);
+  border-bottom: 1px solid var(--border);
+}
+
+.thumb-picker-list {
+  overflow-y: auto;
+  padding: 0.6rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  gap: 0.5rem;
+}
+
+.thumb-item {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.15rem;
+  padding: 0.25rem;
+  background: var(--panel-2);
+  border: 2px solid transparent;
+  border-radius: 8px;
+  color: var(--muted);
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.thumb-item img {
+  width: 100%;
+  aspect-ratio: 146 / 204;
+  object-fit: cover;
+  border-radius: 4.5% / 3.2%;
+  background: var(--bg);
+  display: block;
+}
+
+.thumb-item:hover,
+.thumb-item:focus-visible {
+  border-color: var(--border);
+  color: var(--text);
+  outline: none;
+}
+
+.thumb-item.selected {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
+/* printing already used by another copy: picking it merges the two */
+.thumb-item.flagged::before {
+  content: "⚠";
+  position: absolute;
+  top: 0.35rem;
+  left: 0.35rem;
+  padding: 0 0.25rem;
+  border-radius: 4px;
+  background: rgba(20, 22, 29, 0.8);
+  color: var(--accent);
+  font-size: 0.8rem;
+}
+
+.thumb-caption {
+  font-size: 0.66rem;
+  line-height: 1.25;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .section-label {

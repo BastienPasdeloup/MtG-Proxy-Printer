@@ -1952,7 +1952,7 @@ async function buildCardEntry(englishCard, lang, loc, eng, prefPrint, versionMod
   const langPrints = lang === "en" ? [] : (loc?.prints || []);
   const engPrints = eng?.prints?.length ? eng.prints : [englishCard];
 
-  // The dropdown offers the chosen language's printings AND the English
+  // The version picker offers the chosen language's printings AND the English
   // ones (translated on the fly), oldest release first.
   const prints = [...langPrints, ...engPrints]
     .sort((a, b) => (a.released_at || "").localeCompare(b.released_at || ""));
@@ -2034,7 +2034,7 @@ function computeStatus(entry) {
 }
 
 // Render the faces of the currently selected printing (also used when the
-// user picks another printing from the dropdown). Translations are resolved
+// user picks another printing in the version picker). Translations are resolved
 // lazily, the first time an English print needs the overlay.
 // Scryfall sometimes attaches the English scan to a localized print (e.g.
 // several ECL French cards). Detect it by comparing the localized scan with
@@ -2236,7 +2236,7 @@ async function loadEntries(entries, lang, sortByType = false) {
     localizedMap = await findLocalizedBatch(oracleIds, lang);
   }
 
-  // English print lists are always fetched: they fill the printing dropdown
+  // English print lists are always fetched: they fill the version picker
   // (translated on the fly when selected) and are the display fallback for
   // cards without a usable localized scan.
   setStatus(t("status.lookup"), 0.09);
@@ -2381,6 +2381,7 @@ async function collectTokenEntries(englishCards) {
 // a name match — over-keeping is safer than wrongly removing. Mechanic
 // helper cards stay as long as one remaining card matches their rule, and
 // tokens created by surviving helpers (dungeon room rewards) stay with them.
+// Tokens added by hand (`manual`) are never dropped.
 function pruneOrphanTokens() {
   const tokenEntries = cards.filter((c) => c.section === "tokens");
   if (!tokenEntries.length) return;
@@ -2401,7 +2402,7 @@ function pruneOrphanTokens() {
   const activeRules = new Set(MECHANIC_HELPERS
     .filter((r) => regular.some((c) => r.test(c.english)))
     .map((r) => r.key));
-  const keep = (t) => t.helper
+  const keep = (t) => t.manual ? true : t.helper
     ? activeRules.has(t.helper)
     : wantedOracles.has(t.english.oracle_id) || wantedNames.has(t.english.name);
   tokenEntries.filter(keep).forEach((t) => addParts(t.english));
@@ -2517,12 +2518,15 @@ const BADGES = {
 
 function renderGrid() {
   window.__cards__ = cards; // exposed for debugging / testing
+  closeThumbPicker?.(); // its button is about to be replaced
   const grid = $("card-grid");
   grid.innerHTML = "";
 
   // Cards sit under a "Cards" heading; tokens get their own category at the
-  // end. The "+" tile (add a card) comes right after the last regular card,
-  // not in the token category.
+  // end. Each category ends with its own "+" tile: a card after the last
+  // regular card, a token after the last token. The token category is shown
+  // even when empty (tokens not included automatically), so tokens can
+  // always be added by hand.
   const regular = cards.filter((c) => c.section !== "tokens");
   const tokens = cards.filter((c) => c.section === "tokens");
   const sectionLabel = (text) => {
@@ -2536,12 +2540,11 @@ function renderGrid() {
     grid.appendChild(makeTile(card));
   }
   grid.appendChild(makeAddTile());
-  if (tokens.length) {
-    sectionLabel(t("grid.tokens"));
-    for (const card of tokens) {
-      grid.appendChild(makeTile(card));
-    }
+  sectionLabel(t("grid.tokens"));
+  for (const card of tokens) {
+    grid.appendChild(makeTile(card));
   }
+  grid.appendChild(makeAddTile(true));
 
   const totalCards = cards.reduce((s, c) => s + c.qty, 0);
   const totalSlots = cards.reduce((s, c) => s + c.qty * c.faces.length, 0);
@@ -2644,6 +2647,133 @@ async function openEditDialog(card, img, tile) {
   }
   img.style.opacity = "";
   return true;
+}
+
+/* ------------------------------------------------------------
+ * Thumbnail picker: a panel dropping down under its button, listing
+ * card images to choose from (printings of a card, or the tokens
+ * matching a name)
+ * ---------------------------------------------------------- */
+
+// Scryfall's small image (146 × 204) of a print, front face for DFCs
+const thumbUrl = (p) => p.image_uris?.small || p.card_faces?.[0]?.image_uris?.small || "";
+
+let closeThumbPicker = null; // closes the open panel, if any
+let thumbPickerAnchor = null; // the button that opened it
+
+// items: [{ thumb, lines: [caption lines], title, flagged }]. Resolves with
+// the chosen index, or null when dismissed (Escape, click outside, ✕).
+function openThumbPicker(anchor, items, { selected = -1, heading = "" } = {}) {
+  // Clicking the button of the open panel again just closes it
+  const toggledOff = thumbPickerAnchor === anchor;
+  closeThumbPicker?.();
+  if (toggledOff) return Promise.resolve(null);
+  thumbPickerAnchor = anchor;
+  return new Promise((resolve) => {
+    const panel = document.createElement("div");
+    panel.className = "thumb-picker";
+    panel.setAttribute("role", "listbox");
+
+    const head = document.createElement("div");
+    head.className = "thumb-picker-head";
+    const title = document.createElement("span");
+    title.textContent = heading;
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "dialog-close";
+    close.textContent = "✕";
+    close.title = t("dlg.close");
+    close.setAttribute("aria-label", t("dlg.close"));
+    head.append(title, close);
+
+    const list = document.createElement("div");
+    list.className = "thumb-picker-list";
+    const buttons = items.map((item, i) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "thumb-item";
+      btn.setAttribute("role", "option");
+      btn.setAttribute("aria-selected", String(i === selected));
+      btn.classList.toggle("selected", i === selected);
+      btn.classList.toggle("flagged", !!item.flagged);
+      btn.title = item.title || "";
+      const img = document.createElement("img");
+      img.src = item.thumb;
+      img.alt = item.title || "";
+      img.loading = "lazy";
+      btn.appendChild(img);
+      for (const line of item.lines || []) {
+        if (!line) continue;
+        const cap = document.createElement("span");
+        cap.className = "thumb-caption";
+        cap.textContent = line;
+        btn.appendChild(cap);
+      }
+      btn.addEventListener("click", () => done(i));
+      list.appendChild(btn);
+      return btn;
+    });
+    panel.append(head, list);
+    document.body.appendChild(panel);
+
+    // Under the button (above it when there is clearly more room there),
+    // kept inside the viewport horizontally. Positioned in page coordinates
+    // so it scrolls along with its card.
+    const place = () => {
+      const r = anchor.getBoundingClientRect();
+      const vw = document.documentElement.clientWidth;
+      const width = Math.min(440, vw - 32);
+      panel.style.width = `${width}px`;
+      const left = Math.max(16, Math.min(r.left, vw - width - 16));
+      const below = window.innerHeight - r.bottom;
+      const above = r.top;
+      const up = below < 320 && above > below;
+      panel.style.maxHeight = `${Math.max(220, Math.min(520, (up ? above : below) - 16))}px`;
+      panel.style.left = `${left + window.scrollX}px`;
+      panel.style.top = up
+        ? `${r.top + window.scrollY - panel.offsetHeight - 6}px`
+        : `${r.bottom + window.scrollY + 6}px`;
+    };
+    place();
+    // A picker opened above its button must be re-placed once its height
+    // is known (thumbnails load lazily but have a fixed aspect ratio).
+    requestAnimationFrame(place);
+
+    const onDocDown = (e) => {
+      if (!panel.contains(e.target) && !anchor.contains(e.target)) done(null);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") { e.preventDefault(); done(null); return; }
+      const k = buttons.indexOf(document.activeElement);
+      if (k === -1) return;
+      const step = { ArrowRight: 1, ArrowLeft: -1 }[e.key];
+      if (step) {
+        e.preventDefault();
+        buttons[(k + step + buttons.length) % buttons.length].focus();
+      }
+    };
+    // Follow layout changes (window resize, mobile keyboard closing…)
+    const onResize = () => place();
+    function done(result) {
+      document.removeEventListener("pointerdown", onDocDown, true);
+      document.removeEventListener("keydown", onKey, true);
+      window.removeEventListener("resize", onResize);
+      panel.remove();
+      closeThumbPicker = null;
+      thumbPickerAnchor = null;
+      if (result === null) anchor.focus?.();
+      resolve(result);
+    }
+    close.addEventListener("click", () => done(null));
+    document.addEventListener("pointerdown", onDocDown, true);
+    document.addEventListener("keydown", onKey, true);
+    window.addEventListener("resize", onResize);
+    closeThumbPicker = () => done(null);
+
+    const current = buttons[selected] || buttons[0];
+    current?.focus({ preventScroll: true });
+    current?.scrollIntoView({ block: "nearest" });
+  });
 }
 
 function makeTile(card) {
@@ -2763,36 +2893,44 @@ function makeTile(card) {
   tile.appendChild(imgWrap);
 
   if (card.prints.length > 1) {
-    const sel = document.createElement("select");
+    // Version picker: a button showing the current printing, which opens a
+    // panel with the thumbnails of every available printing.
+    const sel = document.createElement("button");
+    sel.type = "button";
     sel.className = "print-select";
     sel.title = t("tile.printing");
-    const opts = card.prints.map((p, i) => {
-      const opt = document.createElement("option");
-      opt.value = i;
-      sel.appendChild(opt);
-      return opt;
-    });
-    // Printings already used by another copy of the same card (a distinct
-    // entry in the grid) are flagged: picking one merges the two copies.
-    const refreshOptions = () => {
+    sel.setAttribute("aria-haspopup", "listbox");
+    const langTag = (p) => card.lang !== "en" ? `${p.lang.toUpperCase()} · ` : "";
+    const year = (p) => (p.released_at || "").slice(0, 4);
+    const refreshLabel = () => {
+      const p = card.prints[card.printIndex];
+      sel.textContent = `${langTag(p)}${p.set.toUpperCase()} #${p.collector_number} · ${p.set_name}` +
+        (year(p) ? ` (${year(p)})` : "");
+    };
+    refreshLabel();
+    sel.addEventListener("click", async () => {
+      // Printings already used by another copy of the same card (a distinct
+      // entry in the grid) are flagged: picking one merges the two copies.
       const sib = new Set();
       for (const c of cards) {
         if (c !== card && c.english.oracle_id === card.english.oracle_id) {
           sib.add(printKey(c.prints[c.printIndex]));
         }
       }
-      card.prints.forEach((p, i) => {
-        const langTag = card.lang !== "en" ? `${p.lang.toUpperCase()} · ` : "";
-        const year = (p.released_at || "").slice(0, 4);
+      const items = card.prints.map((p) => {
         const dup = sib.has(printKey(p));
-        opts[i].textContent = `${dup ? "⚠ " : ""}${langTag}${p.set.toUpperCase()} #${p.collector_number} · ${p.set_name}${year ? ` (${year})` : ""}${dup ? t("tile.merge") : ""}`;
-        opts[i].selected = i === card.printIndex;
+        return {
+          thumb: thumbUrl(p),
+          lines: [`${langTag(p)}${p.set.toUpperCase()} #${p.collector_number}`, year(p)],
+          title: `${langTag(p)}${p.set_name}${year(p) ? ` (${year(p)})` : ""}${dup ? t("tile.merge") : ""}`,
+          flagged: dup,
+        };
       });
-    };
-    refreshOptions();
-    sel.addEventListener("mousedown", refreshOptions); // keep flags fresh when opening
-    sel.addEventListener("change", async () => {
-      const chosen = Number(sel.value);
+      const chosen = await openThumbPicker(sel, items, {
+        selected: card.printIndex,
+        heading: t("picker.versions", { n: items.length }),
+      });
+      if (chosen === null || chosen === card.printIndex) return;
       // Picking a printing another copy already uses merges the two entries:
       // drop this one and add its quantity to that copy.
       const twin = cards.find((c) => c !== card &&
@@ -2805,6 +2943,7 @@ function makeTile(card) {
         return;
       }
       card.printIndex = chosen;
+      refreshLabel();
       sel.disabled = true;
       img.style.opacity = "0.4";
       try {
@@ -2868,30 +3007,44 @@ function makeTile(card) {
 }
 
 /* ------------------------------------------------------------
- * "+" tile: add an extra card by name (Scryfall autocomplete)
+ * "+" tiles: add an extra card — or, in the token category, a
+ * token / emblem / game aid — by name (Scryfall autocomplete)
  * ---------------------------------------------------------- */
 
 let autocompleteTimer = null;
 
-function makeAddTile() {
+// Scryfall filter for what the token "+" tile can add: tokens and game-aid
+// helpers (is:token covers both, e.g. The Monarch), emblems and dungeons.
+const TOKEN_QUERY = "(is:token or t:emblem or t:dungeon)";
+
+// Distinct token names containing `q`, for the token tile's autocomplete
+async function tokenNameSuggestions(q) {
+  const query = `${TOKEN_QUERY} name:"${q.replace(/"/g, "")}"`;
+  const resp = await fetch(`${SCRYFALL}/cards/search?q=${encodeURIComponent(query)}&unique=cards&order=name`);
+  if (!resp.ok) return [];
+  return [...new Set(((await resp.json()).data || []).map((c) => c.name))];
+}
+
+function makeAddTile(forToken = false) {
   const tile = document.createElement("div");
   tile.className = "card-tile add-tile";
 
   const plus = document.createElement("button");
   plus.className = "add-plus";
   plus.textContent = "+";
-  plus.title = t("add.tile");
+  plus.title = t(forToken ? "add.token.tile" : "add.tile");
 
   const form = document.createElement("div");
   form.className = "add-form hidden";
   const input = document.createElement("input");
   input.type = "text";
-  input.placeholder = t("add.placeholder");
-  input.setAttribute("list", "card-name-suggestions");
-  let datalist = $("card-name-suggestions");
+  input.placeholder = t(forToken ? "add.token.placeholder" : "add.placeholder");
+  const listId = forToken ? "token-name-suggestions" : "card-name-suggestions";
+  input.setAttribute("list", listId);
+  let datalist = $(listId);
   if (!datalist) {
     datalist = document.createElement("datalist");
-    datalist.id = "card-name-suggestions";
+    datalist.id = listId;
     document.body.appendChild(datalist);
   }
   const qtyInput = document.createElement("input");
@@ -2927,11 +3080,16 @@ function makeAddTile() {
     if (q.length < 2) return;
     autocompleteTimer = setTimeout(async () => {
       try {
-        const resp = await fetch(`${SCRYFALL}/cards/autocomplete?q=${encodeURIComponent(q)}`);
-        if (!resp.ok) return;
-        const data = await resp.json();
+        let names;
+        if (forToken) {
+          names = await tokenNameSuggestions(q);
+        } else {
+          const resp = await fetch(`${SCRYFALL}/cards/autocomplete?q=${encodeURIComponent(q)}`);
+          if (!resp.ok) return;
+          names = (await resp.json()).data || [];
+        }
         datalist.innerHTML = "";
-        for (const name of (data.data || []).slice(0, 12)) {
+        for (const name of names.slice(0, 12)) {
           const opt = document.createElement("option");
           opt.value = name;
           datalist.appendChild(opt);
@@ -2944,17 +3102,20 @@ function makeAddTile() {
     const name = input.value.trim();
     if (!name) return;
     const qty = Math.max(1, parseInt(qtyInput.value, 10) || 1);
-    input.disabled = true;
-    qtyInput.disabled = true;
-    addBtn.disabled = true;
+    const setBusy = (busy) => {
+      input.disabled = busy;
+      qtyInput.disabled = busy;
+      addBtn.disabled = busy;
+    };
+    setBusy(true);
     try {
-      await addCustomCard(name, qty);
+      // On success the grid is re-rendered, replacing this tile
+      const added = forToken ? await addTokenByName(name, qty, addBtn) : (await addCustomCard(name, qty), true);
+      if (!added) { setBusy(false); input.focus(); }
     } catch (e) {
       console.error(e);
       setStatus(t("status.addfail", { name, msg: e.message }), null, true);
-      input.disabled = false;
-      qtyInput.disabled = false;
-      addBtn.disabled = false;
+      setBusy(false);
     }
   };
   addBtn.addEventListener("click", submit);
@@ -2964,11 +3125,54 @@ function makeAddTile() {
   return tile;
 }
 
-async function addCustomCard(name, qty = 1) {
+// Tokens matching a name, one per distinct token (oracle_id): the exact name
+// first ("Soldier" alone has a dozen variants), else any name containing it.
+// Several matches open a thumbnail picker anchored on `anchor`. Returns
+// false if the picker was dismissed.
+async function addTokenByName(name, qty, anchor) {
   setStatus(t("status.adding", { name }), null);
-  const resp = await fetchRetry(`${SCRYFALL}/cards/named?fuzzy=${encodeURIComponent(name)}`);
-  if (!resp.ok) throw new Error(t("err.notfound"));
-  const englishCard = await resp.json();
+  const clean = name.replace(/"/g, "");
+  let matches = [];
+  for (const q of [`!"${clean}"`, `name:"${clean}"`]) {
+    const resp = await fetchRetry(`${SCRYFALL}/cards/search?q=${encodeURIComponent(`${TOKEN_QUERY} ${q}`)}` +
+      `&unique=cards&order=name`);
+    if (resp.ok) matches = ((await resp.json()).data || []).filter(hasGoodImage);
+    if (matches.length) break;
+    await sleep(100);
+  }
+  if (!matches.length) throw new Error(t("err.notoken"));
+
+  let card = matches[0];
+  if (matches.length > 1) {
+    hideStatus();
+    const pt = (c) => c.power !== undefined ? `${c.power}/${c.toughness}` : "";
+    const colors = (c) => (c.colors || c.card_faces?.[0]?.colors || []).join("") || "C";
+    const items = matches.map((c) => ({
+      thumb: thumbUrl(c),
+      lines: [c.name, [pt(c), colors(c)].filter(Boolean).join(" · ")],
+      title: `${c.name} — ${c.type_line}${oracleTextOf(c) ? `\n${oracleTextOf(c)}` : ""}`,
+    }));
+    const chosen = await openThumbPicker(anchor, items, {
+      heading: t("picker.tokens", { n: matches.length }),
+    });
+    if (chosen === null) return false;
+    card = matches[chosen];
+  }
+  await addCustomCard(card.name, qty, { card, section: "tokens" });
+  return true;
+}
+
+// Add a card by name to the grid — or, with `card` given (pre-resolved:
+// tokens cannot be found by name), that exact card in the given section.
+async function addCustomCard(name, qty = 1, { card = null, section = "mainboard" } = {}) {
+  setStatus(t("status.adding", { name }), null);
+  let englishCard = card;
+  if (!englishCard) {
+    const resp = await fetchRetry(`${SCRYFALL}/cards/named?fuzzy=${encodeURIComponent(name)}`);
+    if (!resp.ok) throw new Error(t("err.notfound"));
+    englishCard = await resp.json();
+  }
+  const isToken = section === "tokens";
 
   const lang = currentLang;
   const existingEntries = cards.filter((c) => c.english.oracle_id === englishCard.oracle_id);
@@ -2977,7 +3181,10 @@ async function addCustomCard(name, qty = 1) {
     ? (await findLocalizedBatch([englishCard.oracle_id], lang)).get(englishCard.oracle_id)
     : undefined;
   const eng = (await findLocalizedBatch([englishCard.oracle_id], "en")).get(englishCard.oracle_id);
-  const built = await buildCardEntry(englishCard, lang, loc, eng);
+  // A token picked from its thumbnail keeps that artwork when it has no
+  // printing in the chosen language
+  const prefPrint = card ? { set: card.set, cn: card.collector_number } : undefined;
+  const built = await buildCardEntry(englishCard, lang, loc, eng, prefPrint);
 
   // Card already in the list: add a SECOND entry only if we can give it a
   // printing different from every copy already present (so the two show
@@ -2991,6 +3198,8 @@ async function addCustomCard(name, qty = 1) {
         .find((i) => !used.has(printKey(built.prints[i])));
       if (alt === undefined) {
         existingEntries[0].qty += qty;
+        // A token asked for by hand stays even if its producing card goes
+        if (isToken) existingEntries[0].manual = true;
         hideStatus();
         renderGrid();
         return;
@@ -3001,14 +3210,19 @@ async function addCustomCard(name, qty = 1) {
     }
   }
 
-  // Insert before the token category so display and PDF order match
-  const firstToken = cards.findIndex((c) => c.section === "tokens");
-  const insertAt = firstToken === -1 ? cards.length : firstToken;
-  cards.splice(insertAt, 0, { name: englishCard.name, qty, section: "mainboard", ...built });
+  if (isToken) {
+    // Hand-added tokens go at the end of the token category
+    cards.push({ name: englishCard.name, qty, section, manual: true, ...built });
+  } else {
+    // Insert before the token category so display and PDF order match
+    const firstToken = cards.findIndex((c) => c.section === "tokens");
+    const insertAt = firstToken === -1 ? cards.length : firstToken;
+    cards.splice(insertAt, 0, { name: englishCard.name, qty, section, ...built });
+  }
 
   // If tokens are included, also add the tokens/emblems this card creates
   // (skipping any already in the grid).
-  if ($("include-tokens").value === "yes") {
+  if (!isToken && $("include-tokens").value === "yes") {
     const tokenEntries = await collectTokenEntries([englishCard]);
     if (tokenEntries.length) await loadEntries(tokenEntries, lang);
   }
