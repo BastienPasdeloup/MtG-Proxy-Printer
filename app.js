@@ -3087,6 +3087,62 @@ async function tokenNameSuggestions(q) {
   return [...new Set(((await resp.json()).data || []).map((c) => c.name))];
 }
 
+// Names can also be typed in the chosen card language. Localized names
+// offered as suggestions are remembered with their English name, so picking
+// one resolves to exactly that card.
+const localizedNames = new Map(); // "lang|lowercased name" -> English name
+const localizedKey = (lang, name) => `${lang}|${name.trim().toLowerCase()}`;
+const capitalize = (w) => w.charAt(0).toUpperCase() + w.slice(1);
+
+function printedNameOf(c) {
+  const faces = (c.card_faces || []).map((f) => f.printed_name).filter(Boolean);
+  return faces.length > 1 ? faces.join(" // ") : (c.printed_name || faces[0] || null);
+}
+
+// Localized suggestions for `q`: [{ name, english }]. Cards are matched on
+// the names printed in `lang` (Scryfall searches printed names when a
+// language is given). Tokens are hardly ever printed in another language,
+// so for them the app's own vocabulary is searched too: the creature-type
+// words naming most tokens ("Soldat" → Soldier) and the game-aid names.
+async function localizedSuggestions(q, lang, forToken = false) {
+  if (lang === "en") return [];
+  const ql = q.toLowerCase();
+  const out = [];
+  if (forToken) {
+    for (const [en, loc] of Object.entries(SUBTYPE_DICT[lang] || {})) {
+      if (loc.toLowerCase().includes(ql)) out.push({ name: capitalize(loc), english: capitalize(en) });
+    }
+    for (const [en, names] of Object.entries(HELPER_NAMES)) {
+      if (names[lang]?.toLowerCase().includes(ql)) out.push({ name: names[lang], english: en });
+    }
+  }
+  const query = `${forToken ? TOKEN_QUERY : ""} name:"${q.replace(/"/g, "")}" lang:${lang}`.trim();
+  const resp = await fetch(`${SCRYFALL}/cards/search?q=${encodeURIComponent(query)}` +
+    `&unique=cards&include_multilingual=true`);
+  if (resp.ok) {
+    for (const c of (await resp.json()).data || []) {
+      const name = printedNameOf(c);
+      if (name) out.push({ name, english: c.name });
+    }
+  }
+  // Names starting with what was typed first
+  out.sort((a, b) => Number(!a.name.toLowerCase().startsWith(ql)) - Number(!b.name.toLowerCase().startsWith(ql)));
+  for (const sug of out) localizedNames.set(localizedKey(lang, sug.name), sug.english);
+  return out;
+}
+
+// English name for a name typed in the card language, when known
+const englishNameOf = (name, lang) => localizedNames.get(localizedKey(lang, name)) || null;
+
+// The English card object for a card found through one of its localized
+// printings (Scryfall's fuzzy search also matches printed names, and then
+// returns that printing).
+async function toEnglishCard(card) {
+  if (!card || card.lang === "en") return card;
+  const resp = await fetchRetry(`${SCRYFALL}/cards/named?exact=${encodeURIComponent(card.name)}`);
+  return resp.ok ? resp.json() : card;
+}
+
 function makeAddTile(forToken = false) {
   const tile = document.createElement("div");
   tile.className = "card-tile add-tile";
@@ -3142,20 +3198,28 @@ function makeAddTile(forToken = false) {
     if (q.length < 2) return;
     autocompleteTimer = setTimeout(async () => {
       try {
-        let names;
-        if (forToken) {
-          names = await tokenNameSuggestions(q);
-        } else {
+        // English names and names in the card language, side by side
+        const english = (async () => {
+          if (forToken) return tokenNameSuggestions(q);
           const resp = await fetch(`${SCRYFALL}/cards/autocomplete?q=${encodeURIComponent(q)}`);
-          if (!resp.ok) return;
-          names = (await resp.json()).data || [];
-        }
+          return resp.ok ? (await resp.json()).data || [] : [];
+        })();
+        const [engNames, locNames] = await Promise.all([
+          english.catch(() => []),
+          localizedSuggestions(q, currentLang, forToken).catch(() => []),
+        ]);
         datalist.innerHTML = "";
-        for (const name of names.slice(0, 12)) {
+        const seen = new Set();
+        const add = (value, label) => {
+          if (seen.has(value.toLowerCase())) return;
+          seen.add(value.toLowerCase());
           const opt = document.createElement("option");
-          opt.value = name;
+          opt.value = value;
+          if (label && label !== value) opt.label = label; // the English name
           datalist.appendChild(opt);
-        }
+        };
+        locNames.slice(0, 12).forEach((s) => add(s.name, s.english));
+        engNames.slice(0, 12).forEach((n) => add(n));
       } catch { /* suggestions are best-effort */ }
     }, 250);
   });
@@ -3193,14 +3257,26 @@ function makeAddTile(forToken = false) {
 // false if the picker was dismissed.
 async function addTokenByName(name, qty, anchor) {
   setStatus(t("status.adding", { name }), null);
-  const clean = name.replace(/"/g, "");
-  let matches = [];
-  for (const q of [`!"${clean}"`, `name:"${clean}"`]) {
+  const lang = currentLang;
+  const search = async (q) => {
     const resp = await fetchRetry(`${SCRYFALL}/cards/search?q=${encodeURIComponent(`${TOKEN_QUERY} ${q}`)}` +
       `&unique=cards&order=name`);
-    if (resp.ok) matches = ((await resp.json()).data || []).filter(hasGoodImage);
-    if (matches.length) break;
     await sleep(100);
+    return resp.ok ? ((await resp.json()).data || []).filter(hasGoodImage) : [];
+  };
+  // A name typed in the card language goes through its English name
+  const clean = (englishNameOf(name, lang) || name).replace(/"/g, "");
+  let matches = [];
+  for (const q of [`!"${clean}"`, `name:"${clean}"`]) {
+    matches = await search(q);
+    if (matches.length) break;
+  }
+  // Else the (rare) tokens printed in that language, by their printed name
+  if (!matches.length && lang !== "en") {
+    const resp = await fetchRetry(`${SCRYFALL}/cards/search?q=` +
+      encodeURIComponent(`${TOKEN_QUERY} name:"${clean}" lang:${lang}`) + "&unique=cards&include_multilingual=true");
+    const ids = resp.ok ? [...new Set(((await resp.json()).data || []).map((c) => c.oracle_id))] : [];
+    if (ids.length) matches = await search(`(${ids.slice(0, 18).map((id) => `oracleid:${id}`).join(" or ")})`);
   }
   if (!matches.length) throw new Error(t("err.notoken"));
 
@@ -3234,9 +3310,22 @@ async function addCustomCard(name, qty = 1, { card = null, section = "mainboard"
   setStatus(t("status.adding", { name }), null);
   let englishCard = card;
   if (!englishCard) {
-    const resp = await fetchRetry(`${SCRYFALL}/cards/named?fuzzy=${encodeURIComponent(name)}`);
-    if (!resp.ok) throw new Error(t("err.notfound"));
-    englishCard = await resp.json();
+    // English name or name printed in the card language: Scryfall's fuzzy
+    // search knows both (a suggestion picked in the list maps to its exact
+    // English name). Failing that, any card whose printed name contains it.
+    const known = englishNameOf(name, currentLang);
+    const resp = await fetchRetry(known
+      ? `${SCRYFALL}/cards/named?exact=${encodeURIComponent(known)}`
+      : `${SCRYFALL}/cards/named?fuzzy=${encodeURIComponent(name)}`);
+    if (resp.ok) {
+      englishCard = await resp.json();
+    } else if (currentLang !== "en") {
+      const q = `name:"${name.replace(/"/g, "")}" lang:${currentLang}`;
+      const r = await fetchRetry(`${SCRYFALL}/cards/search?q=${encodeURIComponent(q)}&include_multilingual=true`);
+      if (r.ok) englishCard = ((await r.json()).data || [])[0] || null;
+    }
+    if (!englishCard) throw new Error(t("err.notfound"));
+    englishCard = await toEnglishCard(englishCard);
   }
   const isToken = section === "tokens";
 

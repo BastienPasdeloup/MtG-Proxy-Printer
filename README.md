@@ -35,12 +35,16 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    English: with English cards there is nothing to translate and the deck page's own printings
    (hence its artworks) are used as they are.
 3. Click **Load Cards** — card images are fetched from [Scryfall](https://scryfall.com) in the chosen language.
-   A **+** tile at the end of the grid lets you add extra cards by name (with autocompletion).
+   A **+** tile at the end of the grid lets you add extra cards by name (with autocompletion),
+   typed in English or in the card language: suggestions mix both (localized names show their
+   English name alongside), and a localized name resolves to its card ("Foudre" → Lightning Bolt).
    Adding a card already in the list creates a second entry on a **different printing** (so you get
    two artworks); if you instead pick a printing another copy already uses, the version picker flags it
    (⚠, "already added" in its tooltip) and selecting it merges the two copies back into one.
    The token category has its own **+** tile: type a token name (autocompleted among tokens,
-   emblems and dungeons) and, when several tokens share it (there are a dozen "Soldier" tokens),
+   emblems and dungeons, in English or in the card language — since tokens are hardly ever printed
+   in other languages, localized names come from the app's own creature-type and game-aid
+   vocabulary, e.g. "Soldat" → Soldier) and, when several tokens share it (there are a dozen "Soldier" tokens),
    pick the right one from their thumbnails.
    Every thumbnail, in both pickers, carries the badge the card will get once picked (✓, **T**,
    **MT** or **EN**, see the legend): telling official translations from machine ones only needs
