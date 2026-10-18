@@ -41,7 +41,10 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    (⚠, "already added" in its tooltip) and selecting it merges the two copies back into one.
    The token category has its own **+** tile: type a token name (autocompleted among tokens,
    emblems and dungeons) and, when several tokens share it (there are a dozen "Soldier" tokens),
-   pick the right one from their thumbnails. Tokens added this way stay in the list even when no
+   pick the right one from their thumbnails.
+   Every thumbnail, in both pickers, carries the badge the card will get once picked (✓, **T**,
+   **MT** or **EN**, see the legend): telling official translations from machine ones only needs
+   a dry run of the translation, nothing is machine-translated before a version is chosen. Tokens added this way stay in the list even when no
    card producing them is left.
 4. Adjust the deck: remove cards, change quantities, pick another printing with the version button
    under each card — it opens the thumbnails of the chosen language's printings and the English

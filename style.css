@@ -629,6 +629,20 @@ button.primary.big {
   color: var(--text);
 }
 
+/* status badge the card would get (✓ / T / MT / EN), top right */
+.thumb-badge {
+  position: absolute;
+  top: 0.35rem;
+  right: 0.35rem;
+  min-width: 0;
+  padding: 0.05rem 0.35rem;
+  font-size: 0.62rem;
+}
+
+.badge-pending {
+  background: #4a5068;
+}
+
 /* printing already used by another copy: picking it merges the two */
 .thumb-item.flagged::before {
   content: "⚠";

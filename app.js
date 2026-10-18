@@ -769,7 +769,16 @@ const MT_PROVIDERS = {
   mymemory: { label: "MyMemory", fn: myMemoryTranslateImpl },
 };
 
-async function mtgioLookup(faceName, lang) {
+// Cached per face and language: the version picker's badge prediction and
+// the actual translation both ask for it.
+const mtgioCache = new Map();
+function mtgioLookup(faceName, lang) {
+  const key = `${lang}|${faceName}`;
+  if (!mtgioCache.has(key)) mtgioCache.set(key, mtgioFetch(faceName, lang));
+  return mtgioCache.get(key);
+}
+
+async function mtgioFetch(faceName, lang) {
   try {
     const url = "https://api.magicthegathering.io/v1/cards?name=" +
       encodeURIComponent(`"${faceName}"`);
@@ -986,10 +995,10 @@ const SUBTYPE_DICT = {
 // with "et", Japanese with the middle dot, other languages with a space.
 const SUBTYPE_JOIN = { fr: " et ", ja: "・" };
 
-async function translateTypeLine(typeLine, lang) {
+async function translateTypeLine(typeLine, lang, mt = machineTranslate) {
   const [types, subtypes] = typeLine.split(/\s+—\s+/);
   const official = TYPE_DICT[lang]?.[types];
-  if (!official) return { text: await machineTranslate(typeLine, lang), mt: true };
+  if (!official) return { text: await mt(typeLine, lang), mt: true };
   if (!subtypes) return { text: official, mt: false };
   const dict = SUBTYPE_DICT[lang];
   const words = subtypes.split(/\s+/);
@@ -997,7 +1006,7 @@ async function translateTypeLine(typeLine, lang) {
     const sub = words.map((w) => dict[w.toLowerCase()]).join(SUBTYPE_JOIN[lang] || " ");
     return { text: official + (TYPE_SEP[lang] || " — ") + sub, mt: false };
   }
-  const sub = await machineTranslate(subtypes, lang);
+  const sub = await mt(subtypes, lang);
   return { text: official + (TYPE_SEP[lang] || " — ") + sub, mt: true };
 }
 
@@ -1102,7 +1111,11 @@ function deckFaceName(engName) {
 }
 
 // Build per-face {name, type, text} in the target language.
-async function resolveTranslations(englishCard, lang, loc) {
+// With `dryRun`, machine translation is skipped (the English text is kept)
+// but still reported in `usedMT`: it tells cheaply whether the overlay
+// would get a T or an MT badge, for the pickers.
+async function resolveTranslations(englishCard, lang, loc, { dryRun = false } = {}) {
+  const mt = dryRun ? async (text) => text : machineTranslate;
   const faces = englishCard.card_faces?.length ? englishCard.card_faces : [englishCard];
   const texts = [];
   let usedMT = false;
@@ -1144,12 +1157,12 @@ async function resolveTranslations(englishCard, lang, loc) {
         } else if (/\bDungeon\b/.test(face.type_line || "")) {
           t.name = face.name; // dungeon names are proper nouns
         } else {
-          t.name = await machineTranslate(face.name, lang, { isName: true });
+          t.name = await mt(face.name, lang, { isName: true });
           usedMT = true;
         }
       }
       if (!t.type && face.type_line) {
-        const tl = await translateTypeLine(face.type_line, lang);
+        const tl = await translateTypeLine(face.type_line, lang, mt);
         t.type = tl.text;
         usedMT = usedMT || tl.mt;
       }
@@ -1178,7 +1191,7 @@ async function resolveTranslations(englishCard, lang, loc) {
           .filter((f) => /\bDungeon\b/.test(f.type_line || "") && src.includes(f.name))
           .map((f) => f.name);
         dungeonNames.forEach((n, j) => { src = src.split(n).join(`DUNGEONNAME${j}`); });
-        t.text = await machineTranslate(src, lang);
+        t.text = await mt(src, lang);
         if (substituted) {
           t.text = t.text.replace(/cardname/gi, t.name);
         }
@@ -2014,8 +2027,7 @@ function overlayableFace(face) {
   return true;
 }
 
-function printTranslatable(entry) {
-  const print = entry.prints[entry.printIndex];
+function printTranslatable(entry, print = entry.prints[entry.printIndex]) {
   const faces = entry.english.card_faces?.length ? entry.english.card_faces : [entry.english];
   return entry.lang !== "en" && (print.lang !== entry.lang || print._badScan) &&
     OVERLAY_LAYOUTS.has(entry.english.layout) && faces.some(overlayableFace);
@@ -2025,12 +2037,38 @@ function printNeedsOverlay(entry) {
   return printTranslatable(entry) && !entry.forceEnglish;
 }
 
-function computeStatus(entry) {
-  const print = entry.prints[entry.printIndex];
+function computeStatus(entry, print = entry.prints[entry.printIndex]) {
   if (entry.lang === "en" || (print.lang === entry.lang && !print._badScan)) return "localized";
   if (entry.forceEnglish) return "english";
   if (entry.overlayTexts) return entry.usedMT ? "mt" : "overlay";
   return "english";
+}
+
+// T or MT: whether translating this card would need machine translation,
+// found by a dry run of resolveTranslations (nothing machine-translated).
+async function dryRunStatus(englishCard, lang, loc) {
+  const { usedMT } = await resolveTranslations(englishCard, lang, loc, { dryRun: true });
+  return usedMT ? "mt" : "overlay";
+}
+
+// Badge `print` would get if picked in the version picker: a status, or a
+// promise of one. The translation is per card, shared by all its English
+// prints — until it has been resolved, a dry run tells T from MT.
+function predictStatus(entry, print) {
+  if (!printTranslatable(entry, print) || entry.forceEnglish || entry.overlayTexts) {
+    return computeStatus(entry, print);
+  }
+  entry._overlayStatus ||= dryRunStatus(entry.english, entry.lang, entry.loc);
+  return entry._overlayStatus;
+}
+
+// Same for a token in the token picker: ✓ when it has a printing in the
+// chosen language (`loc`, from findLocalizedBatch), else T / MT / EN.
+async function predictTokenStatus(card, lang, loc) {
+  if (lang === "en" || loc?.prints?.length) return "localized";
+  const faces = card.card_faces?.length ? card.card_faces : [card];
+  if (!OVERLAY_LAYOUTS.has(card.layout) || !faces.some(overlayableFace)) return "english";
+  return dryRunStatus(card, lang, loc);
 }
 
 // Render the faces of the currently selected printing (also used when the
@@ -2661,8 +2699,10 @@ const thumbUrl = (p) => p.image_uris?.small || p.card_faces?.[0]?.image_uris?.sm
 let closeThumbPicker = null; // closes the open panel, if any
 let thumbPickerAnchor = null; // the button that opened it
 
-// items: [{ thumb, lines: [caption lines], title, flagged }]. Resolves with
-// the chosen index, or null when dismissed (Escape, click outside, ✕).
+// items: [{ thumb, lines: [caption lines], title, flagged, badge }], where
+// badge is the status badge picking it would give (a BADGES key, or a
+// promise of one, shown as "…" meanwhile). Resolves with the chosen index,
+// or null when dismissed (Escape, click outside, ✕).
 function openThumbPicker(anchor, items, { selected = -1, heading = "" } = {}) {
   // Clicking the button of the open panel again just closes it
   const toggledOff = thumbPickerAnchor === anchor;
@@ -2702,6 +2742,24 @@ function openThumbPicker(anchor, items, { selected = -1, heading = "" } = {}) {
       img.alt = item.title || "";
       img.loading = "lazy";
       btn.appendChild(img);
+      if (item.badge) {
+        const badge = document.createElement("span");
+        const show = (status) => {
+          const b = BADGES[status];
+          if (!b) { badge.remove(); return; }
+          badge.className = `badge thumb-badge ${b.cls}`;
+          badge.textContent = b.label;
+          badge.title = t(b.titleKey);
+        };
+        if (typeof item.badge === "string") {
+          show(item.badge);
+        } else {
+          badge.className = "badge thumb-badge badge-pending";
+          badge.textContent = "…";
+          item.badge.then(show, () => badge.remove());
+        }
+        btn.appendChild(badge);
+      }
       for (const line of item.lines || []) {
         if (!line) continue;
         const cap = document.createElement("span");
@@ -2924,6 +2982,7 @@ function makeTile(card) {
           lines: [`${langTag(p)}${p.set.toUpperCase()} #${p.collector_number}`, year(p)],
           title: `${langTag(p)}${p.set_name}${year(p) ? ` (${year(p)})` : ""}${dup ? t("tile.merge") : ""}`,
           flagged: dup,
+          badge: predictStatus(card, p),
         };
       });
       const chosen = await openThumbPicker(sel, items, {
@@ -3145,12 +3204,16 @@ async function addTokenByName(name, qty, anchor) {
   let card = matches[0];
   if (matches.length > 1) {
     hideStatus();
+    const lang = currentLang;
+    const locs = lang === "en" ? Promise.resolve(new Map())
+      : findLocalizedBatch(matches.map((c) => c.oracle_id), lang);
     const pt = (c) => c.power !== undefined ? `${c.power}/${c.toughness}` : "";
     const colors = (c) => (c.colors || c.card_faces?.[0]?.colors || []).join("") || "C";
     const items = matches.map((c) => ({
       thumb: thumbUrl(c),
       lines: [c.name, [pt(c), colors(c)].filter(Boolean).join(" · ")],
       title: `${c.name} — ${c.type_line}${oracleTextOf(c) ? `\n${oracleTextOf(c)}` : ""}`,
+      badge: locs.then((m) => predictTokenStatus(c, lang, m.get(c.oracle_id))),
     }));
     const chosen = await openThumbPicker(anchor, items, {
       heading: t("picker.tokens", { n: matches.length }),
