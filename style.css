@@ -690,6 +690,40 @@ button.primary.big {
   margin: 2rem 0;
 }
 
+/* Print options, above the Generate button */
+.print-options {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.6rem 1.6rem;
+  margin-bottom: 1rem;
+}
+
+label.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+label.check input {
+  width: 1.05rem;
+  height: 1.05rem;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.print-hint {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin: -0.4rem auto 1rem;
+  max-width: 560px;
+}
+
 .legend ul {
   margin: 0.5rem 0 0;
   padding-left: 0;

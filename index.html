@@ -138,6 +138,18 @@
       </div>
       <div id="card-grid" class="card-grid"></div>
       <div class="generate-row">
+        <div class="print-options">
+          <label class="check" data-i18n-title="print.cutlines.title">
+            <input type="checkbox" id="print-cutlines" checked>
+            <span data-i18n="print.cutlines">Cut lines</span>
+          </label>
+          <label class="check" data-i18n-title="print.backs.title">
+            <input type="checkbox" id="print-backs">
+            <span data-i18n="print.backs">Card backs</span>
+          </label>
+        </div>
+        <p id="print-backs-hint" class="print-hint hidden" data-i18n="print.backs.hint">Each page of cards is followed by
+          a page of backs: print double-sided, flipping on the long edge.</p>
         <button id="generate-btn" class="primary big" data-i18n="btn.generate">Generate Proxies (PDF)</button>
       </div>
     </section>

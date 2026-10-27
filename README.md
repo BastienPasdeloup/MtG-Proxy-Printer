@@ -56,12 +56,19 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
    button at the bottom right of the image). Translated cards show a pencil cursor — click the
    card to edit its name, type line and text manually (only the fields painted on that card
    are offered).
-5. Click **Generate Proxies** — downloads an A4 PDF with 9 cards per page, each 62 × 87 mm, with cut
-   marks, thin grey lines between adjacent cards, and the cards' rounded corners squared off for a
-   clean cut. The bottom corners are always black (white on white-bordered cards); the top corners
-   take the color of the border right next to them (black, white, or the artwork's color on full-art
-   frames) so they blend in. If the deck contains double-sided cards, you are asked whether to print
-   backs too. Print at **100% scale** (no "fit to page").
+5. Click **Generate Proxies** — downloads an A4 PDF with 9 cards per page, each 62 × 87 mm, with the
+   cards' rounded corners squared off for a clean cut. The bottom corners are always black (white on
+   white-bordered cards); the top corners take the color of the border right next to them (black,
+   white, or the artwork's color on full-art frames) so they blend in. Two checkboxes above the
+   button set what is printed (both remembered in the browser):
+   - **Cut lines** (on by default): cut marks around the grid and thin grey lines between adjacent
+     cards.
+   - **Card backs** (off by default): each page of cards is followed by its page of backs, to print
+     double-sided **flipping on the long edge** — the backs are mirrored left ↔ right so each one
+     lands behind its card. Cards get the regular Magic back, double-faced cards their other face
+     (no cut lines are drawn on the backs, where a slight misalignment would show them).
+   Without card backs, if the deck contains double-sided cards, you are asked whether to print their
+   backs as separate cards. Print at **100% scale** (no "fit to page").
    Every dialog can be dismissed with its **✕** or the **Escape** key, which cancels the action
    (dismissing the double-sided question generates no PDF at all).
 

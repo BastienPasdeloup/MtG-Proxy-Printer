@@ -2584,17 +2584,25 @@ function renderGrid() {
   }
   grid.appendChild(makeAddTile(true));
 
-  const totalCards = cards.reduce((s, c) => s + c.qty, 0);
-  const totalSlots = cards.reduce((s, c) => s + c.qty * c.faces.length, 0);
-  const pages = Math.ceil(totalSlots / 9);
   $("deck-name").textContent = deckTitle;
+  updateDeckStats();
+  $("deck-section").classList.toggle("hidden", cards.length === 0 && !emptyDeck);
+}
+
+// Cards / proxies / A4 pages counters. With the card backs option, every
+// card is one proxy (a double-faced card gets its other face on the back)
+// and each page of cards is followed by its page of backs.
+function updateDeckStats() {
+  const withBacks = $("print-backs").checked;
+  const totalCards = cards.reduce((s, c) => s + c.qty, 0);
+  const totalSlots = withBacks ? totalCards : cards.reduce((s, c) => s + c.qty * c.faces.length, 0);
+  const pages = Math.ceil(totalSlots / 9) * (withBacks ? 2 : 1);
   $("deck-stats").textContent = t("grid.stats", {
     cards: totalCards, slots: totalSlots, pages,
     cardword: plural("grid.card", totalCards),
     proxyword: plural("grid.proxy", totalSlots),
     pageword: plural("grid.page", pages),
   });
-  $("deck-section").classList.toggle("hidden", cards.length === 0 && !emptyDeck);
 }
 
 function updateBadge(badgeEl, card) {
@@ -3433,13 +3441,30 @@ function askDfcChoice(count) {
   });
 }
 
+// The regular Magic card back (Scryfall's card_back_id of almost every card)
+const CARD_BACK_URL = "https://backs.scryfall.io/large/0/a/0aeebaf5-8c7d-4636-9e82-8c27447861f7.jpg";
+let cardBackPromise = null;
+function cardBackDataUrl() {
+  cardBackPromise ||= loadImage(CARD_BACK_URL).then((bmp) => {
+    const url = bitmapToDataUrl(bmp);
+    bmp.close?.();
+    return url;
+  });
+  cardBackPromise.catch(() => { cardBackPromise = null; }); // retry next time
+  return cardBackPromise;
+}
+
 async function onGeneratePdf() {
   const btn = $("generate-btn");
   btn.disabled = true;
   try {
+    const withBacks = $("print-backs").checked; // a page of backs after each page
+    const cutLines = $("print-cutlines").checked;
+    // With card backs, double-faced cards simply get their other face on the
+    // back: the question below is only for one-sided printing.
     const dfcCount = cards.filter((c) => c.faces.length > 1).length;
     let includeBacks = false;
-    if (dfcCount > 0) {
+    if (dfcCount > 0 && !withBacks) {
       const choice = await askDfcChoice(dfcCount);
       if (choice === null) return; // dismissed
       includeBacks = choice === "both";
@@ -3460,11 +3485,16 @@ async function onGeneratePdf() {
     // - otherwise (black border): fill them black.
     // Flatten: each copy of each printed face is one slot. Split cards are
     // stored landscape for display — rotate them back to portrait here.
+    // With card backs, each slot also carries what goes behind it: the
+    // card's other face, or the regular Magic card back.
+    const cardBack = withBacks ? await cardBackDataUrl() : null;
     const slots = [];
     for (const card of cards) {
       const faces = includeBacks ? card.faces : card.faces.slice(0, 1);
       for (let i = 0; i < card.qty; i++) {
-        for (const f of faces) slots.push({ url: f, rotated: !!card.rotated });
+        for (const f of faces) {
+          slots.push({ url: f, rotated: !!card.rotated, back: withBacks ? (card.faces[1] || cardBack) : null });
+        }
       }
     }
     const portraitCache = new Map();
@@ -3496,7 +3526,9 @@ async function onGeneratePdf() {
     };
     for (const s of slots) {
       const placed = s.rotated ? portraitCache.get(s.url) : s.url;
-      if (!cornerColors.has(placed)) cornerColors.set(placed, await sampleCorners(placed));
+      for (const url of [placed, s.back]) {
+        if (url && !cornerColors.has(url)) cornerColors.set(url, await sampleCorners(url));
+      }
     }
 
     const drawCutMarks = () => {
@@ -3529,26 +3561,9 @@ async function onGeneratePdf() {
       fill(cc.br); doc.triangle(x + CARD_W, y + CARD_H, x + CARD_W - r, y + CARD_H, x + CARD_W, y + CARD_H - r, "F");
     };
 
-    const perPage = COLS * ROWS;
-    const totalPages = Math.ceil(slots.length / perPage);
-
-    slots.forEach((slot, i) => {
-      const posOnPage = i % perPage;
-      if (i > 0 && posOnPage === 0) doc.addPage();
-      if (posOnPage === 0) drawCutMarks();
-      const col = posOnPage % COLS;
-      const row = Math.floor(posOnPage / COLS);
-      const x = MARGIN_X + col * CARD_W;
-      const y = MARGIN_Y + row * CARD_H;
-      const dataUrl = slot.rotated ? portraitCache.get(slot.url) : slot.url;
-      doc.addImage(dataUrl, "JPEG", x, y, CARD_W, CARD_H);
-      squareCorners(x, y, dataUrl);
-    });
-
     // Thin grey lines between adjacent cards, drawn on top of the images as
-    // a cutting guide (the outer edge is covered by the cut marks above).
-    for (let p = 1; p <= totalPages; p++) {
-      doc.setPage(p);
+    // a cutting guide (the outer edge is covered by the cut marks).
+    const drawInnerLines = () => {
       doc.setDrawColor(150);
       doc.setLineWidth(0.1); // ~1px hairline
       for (let c = 1; c < COLS; c++) {
@@ -3558,6 +3573,34 @@ async function onGeneratePdf() {
       for (let r = 1; r < ROWS; r++) {
         const y = MARGIN_Y + r * CARD_H;
         doc.line(MARGIN_X, y, MARGIN_X + COLS * CARD_W, y);
+      }
+    };
+
+    const placeCard = (dataUrl, col, row) => {
+      const x = MARGIN_X + col * CARD_W;
+      const y = MARGIN_Y + row * CARD_H;
+      doc.addImage(dataUrl, "JPEG", x, y, CARD_W, CARD_H);
+      squareCorners(x, y, dataUrl);
+    };
+
+    const perPage = COLS * ROWS;
+    for (let start = 0; start < slots.length; start += perPage) {
+      const page = slots.slice(start, start + perPage);
+      if (start > 0) doc.addPage();
+      page.forEach((slot, k) => {
+        placeCard(slot.rotated ? portraitCache.get(slot.url) : slot.url, k % COLS, Math.floor(k / COLS));
+      });
+      if (cutLines) {
+        drawCutMarks();
+        drawInnerLines();
+      }
+      // The backs page, printed on the other side of the sheet: flipped on
+      // the long edge, each column lands mirrored (left ↔ right) behind its
+      // card — the grid is centered, so mirrored positions line up exactly.
+      // No cut lines there: they could show through a slight misalignment.
+      if (withBacks) {
+        doc.addPage();
+        page.forEach((slot, k) => placeCard(slot.back, COLS - 1 - (k % COLS), Math.floor(k / COLS)));
       }
     }
 
@@ -3579,6 +3622,21 @@ async function onGeneratePdf() {
 $("load-btn").addEventListener("click", onLoadCards);
 $("retry-btn").addEventListener("click", onRetryFailed);
 $("generate-btn").addEventListener("click", onGeneratePdf);
+
+// Print options, remembered in the browser (a per-viewer convenience)
+for (const [id, key] of [["print-backs", "mtg-proxy-print-backs"], ["print-cutlines", "mtg-proxy-print-cutlines"]]) {
+  const box = $(id);
+  try {
+    const stored = localStorage.getItem(key);
+    if (stored !== null) box.checked = stored === "1";
+  } catch { /* private mode */ }
+  box.addEventListener("change", () => {
+    try { localStorage.setItem(key, box.checked ? "1" : "0"); } catch { /* private mode */ }
+    $("print-backs-hint").classList.toggle("hidden", !$("print-backs").checked);
+    updateDeckStats();
+  });
+}
+$("print-backs-hint").classList.toggle("hidden", !$("print-backs").checked);
 $("deck-url").addEventListener("keydown", (e) => {
   if (e.key === "Enter") onLoadCards();
 });
