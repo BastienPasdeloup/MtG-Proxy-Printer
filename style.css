@@ -709,6 +709,12 @@ label.check {
   cursor: pointer;
 }
 
+label.check select {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
 label.check input {
   width: 1.05rem;
   height: 1.05rem;

@@ -6,7 +6,7 @@
  *   (or pasted text)
  * - Fetch card images from Scryfall in a chosen language
  * - Fallback: English image + official translated text overlay
- * - Generate an A4 PDF, 9 cards per page, 62 x 87 mm each
+ * - Generate an A4 or US Letter PDF, 9 cards per page, 62 x 87 mm each
  * ============================================================ */
 
 const SCRYFALL = "https://api.scryfall.com";
@@ -2589,7 +2589,7 @@ function renderGrid() {
   $("deck-section").classList.toggle("hidden", cards.length === 0 && !emptyDeck);
 }
 
-// Cards / proxies / A4 pages counters. With the card backs option, every
+// Cards / proxies / pages counters (pages named after the paper format). With the card backs option, every
 // card is one proxy (a double-faced card gets its other face on the back)
 // and each page of cards is followed by its page of backs.
 function updateDeckStats() {
@@ -2601,7 +2601,7 @@ function updateDeckStats() {
     cards: totalCards, slots: totalSlots, pages,
     cardword: plural("grid.card", totalCards),
     proxyword: plural("grid.proxy", totalSlots),
-    pageword: plural("grid.page", pages),
+    pageword: plural("grid.page", pages, { format: paperFormat().label }),
   });
 }
 
@@ -3395,8 +3395,18 @@ async function addCustomCard(name, qty = 1, { card = null, section = "mainboard"
 }
 
 /* ------------------------------------------------------------
- * PDF generation: A4, 3 x 3 grid, 62 x 87 mm cards
+ * PDF generation: A4 or US Letter, 3 x 3 grid, 62 x 87 mm cards
  * ---------------------------------------------------------- */
+
+// Paper formats offered for the PDF, in mm. Both fit the 186 x 261 mm grid,
+// which stays centered so mirrored card backs line up on duplex prints.
+const PAPER_FORMATS = {
+  a4: { jspdf: "a4", label: "A4", w: 210, h: 297 },
+  letter: { jspdf: "letter", label: "Letter", w: 215.9, h: 279.4 },
+};
+function paperFormat() {
+  return PAPER_FORMATS[$("print-paper").value] || PAPER_FORMATS.a4;
+}
 
 // Rotate a landscape face (split card) back to portrait for printing.
 async function rotateToPortrait(dataUrl) {
@@ -3470,13 +3480,14 @@ async function onGeneratePdf() {
       includeBacks = choice === "both";
     }
     const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const paper = paperFormat();
+    const doc = new jsPDF({ unit: "mm", format: paper.jspdf });
 
-    const PAGE_W = 210, PAGE_H = 297;
+    const PAGE_W = paper.w, PAGE_H = paper.h;
     const CARD_W = 62, CARD_H = 87;
     const COLS = 3, ROWS = 3;
-    const MARGIN_X = (PAGE_W - COLS * CARD_W) / 2; // 12 mm
-    const MARGIN_Y = (PAGE_H - ROWS * CARD_H) / 2; // 18 mm
+    const MARGIN_X = (PAGE_W - COLS * CARD_W) / 2; // A4: 12 mm, Letter: 14.95 mm
+    const MARGIN_Y = (PAGE_H - ROWS * CARD_H) / 2; // A4: 18 mm, Letter: 9.2 mm
 
     // Corner treatment depends on the printing's frame:
     // - full-art / borderless: the art runs to the edge, so adding a corner
@@ -3534,16 +3545,18 @@ async function onGeneratePdf() {
     const drawCutMarks = () => {
       doc.setDrawColor(150);
       doc.setLineWidth(0.1);
-      const len = 6;
+      // 6 mm marks, shortened to stay 4 mm clear of the paper edge (Letter
+      // only leaves 9.2 mm above and below the grid)
+      const lenX = Math.min(6, MARGIN_X - 4), lenY = Math.min(6, MARGIN_Y - 4);
       for (let c = 0; c <= COLS; c++) {
         const x = MARGIN_X + c * CARD_W;
-        doc.line(x, MARGIN_Y - len, x, MARGIN_Y);
-        doc.line(x, MARGIN_Y + ROWS * CARD_H, x, MARGIN_Y + ROWS * CARD_H + len);
+        doc.line(x, MARGIN_Y - lenY, x, MARGIN_Y);
+        doc.line(x, MARGIN_Y + ROWS * CARD_H, x, MARGIN_Y + ROWS * CARD_H + lenY);
       }
       for (let r = 0; r <= ROWS; r++) {
         const y = MARGIN_Y + r * CARD_H;
-        doc.line(MARGIN_X - len, y, MARGIN_X, y);
-        doc.line(MARGIN_X + COLS * CARD_W, y, MARGIN_X + COLS * CARD_W + len, y);
+        doc.line(MARGIN_X - lenX, y, MARGIN_X, y);
+        doc.line(MARGIN_X + COLS * CARD_W, y, MARGIN_X + COLS * CARD_W + lenX, y);
       }
     };
 
@@ -3637,6 +3650,17 @@ for (const [id, key] of [["print-backs", "mtg-proxy-print-backs"], ["print-cutli
   });
 }
 $("print-backs-hint").classList.toggle("hidden", !$("print-backs").checked);
+{
+  const paper = $("print-paper");
+  try {
+    const stored = localStorage.getItem("mtg-proxy-print-paper");
+    if (stored in PAPER_FORMATS) paper.value = stored;
+  } catch { /* private mode */ }
+  paper.addEventListener("change", () => {
+    try { localStorage.setItem("mtg-proxy-print-paper", paper.value); } catch { /* private mode */ }
+    updateDeckStats();
+  });
+}
 $("deck-url").addEventListener("keydown", (e) => {
   if (e.key === "Enter") onLoadCards();
 });

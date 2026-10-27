@@ -41,7 +41,7 @@
   </nav>
   <header>
     <h1>🃏 MtG Proxy Printer</h1>
-    <p class="subtitle" data-i18n="header.subtitle">Load a decklist, pick a language, print proxies (9 per A4 page,
+    <p class="subtitle" data-i18n="header.subtitle">Load a decklist, pick a language, print proxies (9 per page,
       62&nbsp;×&nbsp;87&nbsp;mm)</p>
   </header>
 
@@ -139,6 +139,13 @@
       <div id="card-grid" class="card-grid"></div>
       <div class="generate-row">
         <div class="print-options">
+          <label class="check" data-i18n-title="print.paper.title">
+            <span data-i18n="print.paper">Paper</span>
+            <select id="print-paper">
+              <option value="a4" selected>A4</option>
+              <option value="letter" data-i18n="print.paper.letter">US Letter</option>
+            </select>
+          </label>
           <label class="check" data-i18n-title="print.cutlines.title">
             <input type="checkbox" id="print-cutlines" checked>
             <span data-i18n="print.cutlines">Cut lines</span>
