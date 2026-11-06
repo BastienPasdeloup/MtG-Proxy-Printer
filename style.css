@@ -706,10 +706,10 @@ button.primary.big {
 }
 
 .print-body {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto 1fr;
   align-items: center;
-  justify-content: space-between;
-  gap: 1.2rem 2rem;
+  gap: 1.2rem 0;
 }
 
 /* Two columns: labels, then their dropdowns; checkboxes and the hint span both */
@@ -764,14 +764,16 @@ label.check input {
   max-width: 520px;
 }
 
+/* The button gets the whole room right of the options and sits centered in
+   it; equal side margins keep it clear of them without shifting the center */
 .print-body #generate-btn {
-  flex-shrink: 0;
+  justify-self: center;
+  margin-inline: 1rem;
 }
 
 @media (max-width: 640px) {
   .print-body {
-    flex-direction: column;
-    align-items: stretch;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .print-options {
@@ -780,6 +782,11 @@ label.check input {
 
   .print-hint {
     margin-left: 0;
+  }
+
+  .print-body #generate-btn {
+    justify-self: stretch;
+    margin-inline: 0;
   }
 }
 
