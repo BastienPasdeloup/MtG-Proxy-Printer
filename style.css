@@ -685,18 +685,58 @@ button.primary.big {
   margin-top: 0.5rem;
 }
 
-.generate-row {
-  text-align: center;
+/* Print settings box, under the card grid: options stacked on the left,
+   the Generate button on the right (below them on narrow screens) */
+.print-panel {
+  background: var(--panel);
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  padding: 1.1rem 1.4rem 1.3rem;
   margin: 2rem 0;
 }
 
-/* Print options, above the Generate button */
-.print-options {
+.print-panel h3 {
+  margin: 0 0 0.9rem;
+  font-size: 1.05rem;
+  color: var(--accent);
+}
+
+.print-panel h3::before {
+  content: "🖨️ ";
+}
+
+.print-body {
   display: flex;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 0.6rem 1.6rem;
-  margin-bottom: 1rem;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.2rem 2rem;
+}
+
+/* Two columns: labels, then their dropdowns; checkboxes and the hint span both */
+.print-options {
+  display: grid;
+  grid-template-columns: auto minmax(0, max-content);
+  align-items: center;
+  gap: 0.6rem 0.9rem;
+  min-width: 0;
+}
+
+.print-options > label:not(.check) {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--text);
+}
+
+.print-options select {
+  padding: 0.3rem 0.5rem;
+  font-size: 0.9rem;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+.print-options > label.check,
+.print-options > .print-hint {
+  grid-column: 1 / -1;
 }
 
 label.check {
@@ -706,12 +746,6 @@ label.check {
   margin: 0;
   font-size: 0.95rem;
   color: var(--text);
-  cursor: pointer;
-}
-
-label.check select {
-  padding: 0.25rem 0.5rem;
-  font-size: 0.9rem;
   cursor: pointer;
 }
 
@@ -726,8 +760,27 @@ label.check input {
 .print-hint {
   color: var(--muted);
   font-size: 0.85rem;
-  margin: -0.4rem auto 1rem;
-  max-width: 560px;
+  margin: -0.2rem 0 0 1.5rem;
+  max-width: 520px;
+}
+
+.print-body #generate-btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .print-body {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .print-options {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .print-hint {
+    margin-left: 0;
+  }
 }
 
 .legend ul {

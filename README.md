@@ -59,8 +59,8 @@ A static web app to print Magic: The Gathering proxies from a decklist, hosted o
 5. Click **Generate Proxies** — downloads a PDF with 9 cards per page, with the
    cards' rounded corners squared off for a clean cut. The bottom corners are always black (white on
    white-bordered cards); the top corners take the color of the border right next to them (black,
-   white, or the artwork's color on full-art frames) so they blend in. The options above the
-   button set what is printed (all remembered in the browser):
+   white, or the artwork's color on full-art frames) so they blend in. The **Print settings** box
+   under the card grid, next to the button, sets what is printed (all remembered in the browser):
    - **Paper**: A4 (default) or US Letter. The 3 × 3 grid stays centered on either; on Letter the
      cut marks are shortened to keep clear of the narrower top and bottom margins.
    - **Card size**: 62 × 87 mm (default), slightly under a real card so the proxy slides into
